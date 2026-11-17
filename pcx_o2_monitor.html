@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PCX O2モニター</title>
+<style>
+:root{
+  --bg:#E6ECF0;--panel:#F7F9FB;--ink:#16212B;--sub:#5A6874;--line:#CBD4DB;
+  --rich:#B85F00;--lean:#1D5FC4;--warn:#C51F38;--ok:#2B7A4B;
+  color-scheme:light;box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111A22;--panel:#19242E;--ink:#E3EAF0;--sub:#92A2B0;--line:#2C3A47;
+    --rich:#F0A23C;--lean:#629FF4;--warn:#F2556B;--ok:#5CC38A;color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111A22;--panel:#19242E;--ink:#E3EAF0;--sub:#92A2B0;--line:#2C3A47;
+  --rich:#F0A23C;--lean:#629FF4;--warn:#F2556B;--ok:#5CC38A;color-scheme:dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  font-size:15px;line-height:1.6;-webkit-text-size-adjust:100%}
+.num{font-variant-numeric:tabular-nums}
+main{max-width:560px;margin:0 auto;padding:12px 14px 32px}
+header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+h1{font-size:17px;margin:0;flex:1;font-weight:700}
+button,select,input{font:inherit;color:inherit}
+.btn{border:1.5px solid var(--ink);background:transparent;border-radius:999px;padding:6px 14px;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--ink);color:var(--bg)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--lean);outline-offset:2px}
+.status{font-size:13px;color:var(--sub);width:100%;line-height:1.5;height:4.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.hero{background:var(--panel);border-radius:18px;padding:18px 18px 14px;border-left:8px solid var(--line);transition:border-color .15s}
+.hero[data-side="rich"]{border-left-color:var(--rich)}
+.hero[data-side="lean"]{border-left-color:var(--lean)}
+.read{display:flex;align-items:center;gap:14px;flex-wrap:nowrap}
+.side{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
+.big{font-size:64px;font-weight:800;line-height:1;letter-spacing:-.02em}
+.judge{font-size:22px;font-weight:700;white-space:nowrap;line-height:1.2}
+.hero[data-side="rich"] .judge{color:var(--rich)}
+.hero[data-side="lean"] .judge{color:var(--lean)}
+.cap{font-size:13px;color:var(--sub);margin:8px 0 0;line-height:1.6;min-height:4.8em}
+.track{position:relative;height:16px;margin:20px 0 4px;border-radius:8px;overflow:visible;display:flex}
+.track .a{flex:0 0 42%;background:var(--rich);opacity:.3;border-radius:8px 0 0 8px}
+.track .m{flex:0 0 14%;background:var(--ok);opacity:.5}
+.track .b{flex:1;background:var(--lean);opacity:.3;border-radius:0 8px 8px 0}
+.big.approx{opacity:.55}
+.tag{font-size:12px;font-weight:600;border:1.5px solid currentColor;border-radius:999px;padding:0 8px;color:var(--sub)}
+.tag.ok{color:var(--ok)}
+.needle{position:absolute;top:-7px;left:0;width:4px;height:30px;margin-left:-2px;background:var(--ink);border-radius:2px;transition:left .08s linear}
+.scale{position:relative;height:18px;font-size:12px;color:var(--sub)}
+.scale span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.scale span:first-child{transform:none}
+.scale span:last-child{transform:translateX(-100%)}
+.alertslot{position:relative;margin-top:12px;height:42px;border-radius:12px;border:1.5px dashed var(--line);display:flex;align-items:center;padding:0 14px;font-size:13px;color:var(--sub)}
+.alert{position:absolute;inset:-1.5px;display:flex;align-items:center;padding:0 14px;border-radius:12px;background:var(--warn);color:#fff;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;visibility:hidden}
+.alert.on{visibility:visible}
+.alert.rich{background:var(--rich)}
+.ctrl{display:flex;align-items:center;gap:8px;height:28px;margin-top:8px;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden}
+.ctrl span{overflow:hidden;text-overflow:ellipsis}
+.ctrl i{flex:0 0 10px;height:10px;border-radius:50%;background:var(--line)}
+.ctrl[data-lv="on"] i{background:var(--rich)}
+.ctrl[data-lv="maybe"] i{background:var(--rich);opacity:.45}
+.ctrl[data-lv="off"] i{background:var(--ok)}
+.ctrl[data-lv="none"]{color:var(--sub);font-weight:400}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-radius:14px;overflow:hidden;margin-top:12px}
+.cell{background:var(--panel);padding:9px 12px}
+.cell{min-width:0}
+.cell .v{font-size:19px;font-weight:700;line-height:1.3;height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell .k{font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.box{background:var(--panel);border-radius:14px;margin-top:12px;padding:12px 14px}
+canvas{width:100%;height:190px;display:block}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--sub);margin-top:6px}
+.legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:4px;border-radius:2px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row+.row{margin-top:10px}
+.field{display:flex;flex-direction:column;font-size:12px;color:var(--sub);gap:2px}
+.field input,.field select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:5px 8px;width:110px;color:var(--ink)}
+.field select{width:220px}
+summary{cursor:pointer;font-weight:600}
+pre.log{font-size:11px;max-height:200px;overflow:auto;white-space:pre-wrap;color:var(--sub);margin:8px 0 0}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0}
+h2{font-size:15px;margin:0 0 8px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>PCX O2モニター</h1>
+    <button class="btn primary" id="bConnect">ELM327に接続</button>
+    <button class="btn" id="bDemo">デモ</button>
+    <button class="btn" id="bStop" disabled>停止</button>
+    <div class="status" id="status">キーをONにしてから接続してください。</div>
+  </header>
+
+  <div class="hero" id="hero" data-side="none">
+    <div class="read">
+      <div class="big num" id="big">--</div>
+      <div class="side">
+        <div class="judge" id="judge">待機中</div>
+        <span class="tag" id="tag" style="visibility:hidden">目安値</span>
+      </div>
+    </div>
+    <p class="cap" id="cap">AFR 12.2〜17.2で表示します。緑の範囲（14.3〜15.0）以外はナローバンドからの目安値です。</p>
+    <div class="track"><div class="a"></div><div class="m"></div><div class="b"></div><div class="needle" id="needle"></div></div>
+    <div class="scale num"><span style="left:0">12.2 リッチ</span><span style="left:50%">14.7</span><span style="left:100%">リーン 17.2</span></div>
+    <div class="alertslot">警告なし
+      <div class="alert" id="alert">リーン警告：高開度で低電圧が続いています</div>
+      <div class="alert rich" id="alertRich">リッチ警告：濃い側に張り付いています</div>
+    </div>
+    <div class="ctrl" id="ctrl" data-lv="none"><i></i><b style="font-size:12px;font-weight:400;color:var(--sub)">介入判定</b><span id="ctrlT">基準データ未記録</span></div>
+  </div>
+
+  <div class="grid">
+    <div class="cell"><div class="k">O2電圧</div><div class="v num" id="cV">--</div></div>
+    <div class="cell"><div class="k">回転数</div><div class="v num" id="cRpm">--</div></div>
+    <div class="cell"><div class="k">スロットル開度</div><div class="v num" id="cTps">--</div></div>
+    <div class="cell"><div class="k">燃調モード</div><div class="v" id="cLoop" style="font-size:15px;line-height:1.7;height:1.7em">--</div></div>
+    <div class="cell"><div class="k">短期燃調補正</div><div class="v num" id="cStft">--</div></div>
+    <div class="cell"><div class="k">水温</div><div class="v num" id="cEct">--</div></div>
+    <div class="cell"><div class="k">O2切替（10秒）</div><div class="v num" id="cHz">--</div></div>
+    <div class="cell"><div class="k">2秒平均電圧</div><div class="v num" id="cAvg">--</div></div>
+    <div class="cell"><div class="k">リーン/リッチ</div><div class="v num" id="cLeanN">0 / 0</div></div>
+  </div>
+
+  <div class="box">
+    <canvas id="cv"></canvas>
+    <div class="legend"><span><i id="lgV"></i>推定AFR</span><span><i id="lgT"></i>スロットル開度</span><span>直近30秒</span></div>
+  </div>
+
+  <div class="box">
+    <h2>記録</h2>
+    <div class="row">
+      <button class="btn" id="bRec">記録開始</button>
+      <button class="btn" id="bCsv" disabled>CSVを保存</button>
+      <span class="note num" id="recInfo" style="margin:0">0件</span>
+    </div>
+    <p class="note">走行中は画面を見ずに記録だけ回し、停車してから確認してください。</p>
+  </div>
+
+  <div class="box">
+    <h2>コントローラー介入の判定</h2>
+    <div class="row">
+      <button class="btn" id="bBase">基準を記録</button>
+      <button class="btn" id="bBaseClr">基準を消去</button>
+      <span class="note num" id="baseInfo" style="margin:0">基準：0/50領域</span>
+    </div>
+    <p class="note">コントローラーの増量をゼロにして暖機後に走り、回転数×開度ごとの基準を取ります。その後は基準との差で介入を判定します。O2制御中は燃調補正のマイナス、高負荷中はO2電圧の上昇で判断します。</p>
+  </div>
+
+  <details class="box">
+    <summary>設定</summary>
+    <div class="row" style="margin-top:10px">
+      <label class="field">通信プロトコル
+        <select id="sProto">
+          <option value="0">自動</option>
+          <option value="5">ISO 14230 高速初期化</option>
+          <option value="4">ISO 14230 5ボー初期化</option>
+          <option value="3">ISO 9141-2</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <label class="field">警告：開度（%以上）<input id="iTps" type="number" value="70" min="0" max="100"></label>
+      <label class="field">警告：電圧（V未満）<input id="iV" type="number" value="0.20" step="0.01" min="0" max="1"></label>
+      <label class="field">警告：継続（秒）<input id="iDur" type="number" value="0.5" step="0.1" min="0.1"></label>
+    </div>
+    <div class="row">
+      <label class="field">リッチ警告：電圧（V以上）<input id="iRV" type="number" value="0.90" step="0.01" min="0.5" max="1.2"></label>
+      <label class="field">リッチ警告：継続（秒）<input id="iRDur" type="number" value="2.0" step="0.1" min="0.1"></label>
+    </div>
+    <p class="note">ナローバンドは約0.45Vを境にリッチとリーンが切り替わるだけのセンサーです。推定AFRは一般的なジルコニア特性からの目安で、センサー温度で大きく変わります。</p>
+  </details>
+
+  <details class="box">
+    <summary>通信ログ</summary>
+    <pre class="log" id="log"></pre>
+  </details>
+</main>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const SERVICES = [0xfff0, 0xffe0, 0x18f0, 'e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
+const LOOP = {1:'暖機中',2:'O2制御中',4:'高負荷・減速',8:'異常',16:'センサー異常'};
+// ナローバンド電圧 → λ の目安（センサー活性時）
+// 0.12〜0.85V（約14.3〜15.0）は一般的なジルコニア特性、その外側はMini3同様の表示域に合わせた目安
+const TABLE = [[0.02,17.2],[0.05,16.2],[0.08,15.6],[0.12,15.0],[0.20,14.88],[0.30,14.77],[0.45,14.70],[0.60,14.63],[0.70,14.55],[0.80,14.42],[0.85,14.33],[0.87,13.8],[0.89,13.2],[0.91,12.7],[0.93,12.2]];
+const AFR_MIN = 12.2, AFR_MAX = 17.2;
+
+const S = {v:null,stft:null,ltft:null,rpm:null,tps:null,ect:null,loop:null};
+let hist = [], cross = [], lastSide = null, leanStart = null, leanActive = false, leanN = 0, richStart = null, richActive = false, richN = 0;
+let rec = false, recData = [], running = false, mode = null, demoTimer = null, wakeLock = null;
+let dev = null, chW = null, chN = null, rxBuf = '', pending = null, lock = Promise.resolve();
+let o2Pid = '14', o2Miss = 0, drawQueued = false, hasLtft = false;
+let baseRec = false, baseTick = 0, ctrlJ = {lv:'none', t:'基準データ未記録'};
+const TPS_EDGES = [0,10,25,50,75,101];
+function binKey(rpm, tps){
+  if (rpm == null || tps == null) return null;
+  const r = Math.min(9, Math.floor(rpm/1000)); let t = 0;
+  while (t < TPS_EDGES.length-2 && tps >= TPS_EDGES[t+1]) t++;
+  return r + '_' + t;
+}
+function loadBase(){ try{ return JSON.parse(localStorage.getItem('pcxO2Base') || '{}') || {}; }catch(e){ return {}; } }
+function saveBase(){ try{ localStorage.setItem('pcxO2Base', JSON.stringify(base)); }catch(e){} }
+let base = loadBase();
+function trimOf(stft, ltft){ return stft == null ? null : stft + (ltft ?? 0); }
+
+function status(t){ $('status').textContent = t; }
+function log(t){ const el = $('log'); el.textContent = (el.textContent + t + '\n').split('\n').slice(-200).join('\n'); el.scrollTop = el.scrollHeight; }
+
+function estimate(v){
+  if (v == null) return null;
+  const last = TABLE[TABLE.length-1];
+  const reliable = v >= 0.12 && v <= 0.85;
+  if (v <= TABLE[0][0]) return {afr:AFR_MAX, clip:'max', reliable:false};
+  if (v >= last[0]) return {afr:AFR_MIN, clip:'min', reliable:false};
+  for (let i = 0; i < TABLE.length-1; i++){
+    const [v0,a0] = TABLE[i], [v1,a1] = TABLE[i+1];
+    if (v >= v0 && v <= v1) return {afr: a0 + (a1-a0)*(v-v0)/(v1-v0), clip:null, reliable};
+  }
+  return null;
+}
+
+/* ---------- BLE / ELM327 ---------- */
+async function writeRaw(str){
+  const d = new TextEncoder().encode(str);
+  for (let i = 0; i < d.length; i += 20){
+    const c = d.slice(i, i+20);
+    if (chW.properties.writeWithoutResponse) await chW.writeValueWithoutResponse(c);
+    else await chW.writeValue(c);
+  }
+}
+function onRx(e){
+  rxBuf += new TextDecoder().decode(e.target.value);
+  if (rxBuf.includes('>') && pending){
+    const r = rxBuf; rxBuf = ''; const p = pending; pending = null;
+    clearTimeout(p.timer); p.resolve(r);
+  }
+}
+function cmd(c, timeout = 2000, verbose = false){
+  const run = () => new Promise(resolve => {
+    rxBuf = '';
+    const timer = setTimeout(() => { pending = null; resolve('TIMEOUT'); }, timeout);
+    pending = {resolve, timer};
+    writeRaw(c + '\r').catch(() => { clearTimeout(timer); pending = null; resolve('WRITEFAIL'); });
+  }).then(r => { if (verbose) log('> ' + c + '\n  ' + r.replace(/[\r\n>]+/g,' ').trim()); return r; });
+  const p = lock.then(run); lock = p.catch(() => {}); return p;
+}
+function parse(raw, pid){
+  let s = String(raw).toUpperCase().replace(/SEARCHING\.\.\./g,'').replace(/BUS ?INIT:?[\s.]*(OK)?/g,'');
+  if (/NO ?DATA|ERROR|UNABLE|STOPPED|TIMEOUT|WRITEFAIL|\?/.test(s)) return null;
+  const h = s.replace(/[^0-9A-F]/g,''); const i = h.indexOf('41' + pid);
+  if (i < 0) return null;
+  const d = h.slice(i+4), out = [];
+  for (let k = 0; k+1 < d.length && out.length < 4; k += 2) out.push(parseInt(d.substr(k,2),16));
+  return out.length ? out : null;
+}
+
+async function connect(){
+  if (!navigator.bluetooth){
+    status('このブラウザはBluetooth接続に対応していません。AndroidはChrome、iPhoneはBluefyで開いてください（デモは動きます）。');
+    return;
+  }
+  try{
+    status('アダプターを選んでください…');
+    dev = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:SERVICES});
+    dev.addEventListener('gattserverdisconnected', () => { if (mode === 'ble'){ stop(); status('アダプターとの接続が切れました。'); } });
+    status('接続中…');
+    const srv = await dev.gatt.connect();
+    let found = null;
+    for (const s of await srv.getPrimaryServices()){
+      let n = null, w = null;
+      for (const c of await s.getCharacteristics()){
+        if (!n && (c.properties.notify || c.properties.indicate)) n = c;
+        if (!w && (c.properties.write || c.properties.writeWithoutResponse)) w = c;
+      }
+      if (n && w){ found = {n, w}; break; }
+    }
+    if (!found) throw new Error('ELM327の通信チャンネルが見つかりません。BLE対応のアダプターか確認してください。');
+    chN = found.n; chW = found.w;
+    await chN.startNotifications();
+    chN.addEventListener('characteristicvaluechanged', onRx);
+    mode = 'ble'; setButtons();
+    await initElm();
+    keepAwake();
+    poll();
+  }catch(err){
+    if (err && err.name === 'NotFoundError'){ status('接続をキャンセルしました。'); return; }
+    status('接続できませんでした：' + (err.message || err));
+    log('ERR ' + (err.message || err));
+    stop();
+  }
+}
+
+async function initElm(){
+  status('アダプターを初期化中…');
+  await cmd('ATZ', 4000, true);
+  for (const c of ['ATE0','ATL0','ATS0','ATH0','ATAT1']) await cmd(c, 2000, true);
+  await cmd('ATSP' + $('sProto').value, 2000, true);
+  status('車両と通信を確立中…（K-lineは10秒ほどかかることがあります）');
+  const b = parse(await cmd('0100', 15000, true), '00');
+  if (!b || b.length < 4) throw new Error('車両から応答がありません。キーON、カプラー、プロトコル設定を確認してください。');
+  const bits = ((b[0]<<24)|(b[1]<<16)|(b[2]<<8)|b[3]) >>> 0;
+  const sup = p => Math.floor(bits / 2 ** (32 - p)) % 2 === 1;
+  o2Pid = sup(0x14) ? '14' : sup(0x15) ? '15' : '14';
+  hasLtft = sup(0x07);
+  const list = [[0x03,'燃調モード'],[0x07,'長期補正'],[0x05,'水温'],[0x0C,'回転数'],[0x11,'開度'],[0x14,'O2(B1S1)'],[0x15,'O2(B1S2)']]
+    .map(([p,n]) => n + (sup(p) ? '○' : '×')).join(' ');
+  log('対応PID: ' + list);
+  const dp = await cmd('ATDP', 2000, true);
+  status('接続しました。' + list + '　' + dp.replace(/[\r\n>]+/g,' ').trim());
+  if (!sup(0x14) && !sup(0x15)) log('注意：標準PIDのO2電圧に非対応と申告されています。読めない可能性があります。');
+}
+
+async function poll(){
+  running = true; let n = 0; o2Miss = 0;
+  while (running && mode === 'ble'){
+    const b = parse(await cmd('01' + o2Pid, 1500), o2Pid);
+    if (b){ S.v = b[0]/200; S.stft = (b.length > 1 && b[1] !== 0xFF) ? (b[1]-128)*100/128 : null; o2Miss = 0; }
+    else if (++o2Miss === 10) status('O2電圧が取得できません。この車両はPID ' + o2Pid + ' に対応していない可能性があります。');
+    const r = parse(await cmd('010C', 1500), '0C'); if (r && r.length > 1) S.rpm = (r[0]*256 + r[1]) / 4;
+    const t = parse(await cmd('0111', 1500), '11'); if (t) S.tps = t[0]*100/255;
+    if (n % 8 === 0){
+      const e = parse(await cmd('0105', 1500), '05'); if (e) S.ect = e[0] - 40;
+      const f = parse(await cmd('0103', 1500), '03'); if (f) S.loop = f[0];
+      if (hasLtft){ const lt = parse(await cmd('0107', 1500), '07'); if (lt) S.ltft = (lt[0]-128)*100/128; }
+    }
+    n++;
+    if (b) ingest();
+  }
+}
+
+/* ---------- デモ ---------- */
+function startDemo(){
+  stop(); mode = 'demo'; running = true; setButtons(); keepAwake();
+  status('デモ表示中：巡航→全開→全開でリーン→減速→アイドルを20秒で繰り返します。');
+  const t0 = performance.now(); let v = 0.4, lastCyc = -1;
+  demoTimer = setInterval(() => {
+    const el = performance.now() - t0, t = el % 20000, s = t/1000;
+    const on = Math.floor(el / 20000) % 2 === 1;
+    if (Math.floor(el/20000) !== lastCyc){ lastCyc = Math.floor(el/20000);
+      status(on ? 'デモ：コントローラーON（増量中）の想定です。' : 'デモ：コントローラーOFFの想定です。「基準を記録」を押すならこの間に。'); }
+    let target, tps, rpm, loop;
+    if (s < 8){ target = Math.sin(s*2*Math.PI*1.2) > 0 ? 0.78 : 0.14; tps = 18; rpm = 5200; loop = 2; }
+    else if (s < 12){ target = on ? 0.90 : 0.80; tps = 100; rpm = 8400; loop = 4; }
+    else if (s < 14){ target = 0.09; tps = 100; rpm = 8700; loop = 4; }
+    else if (s < 16){ target = 0.04; tps = 0; rpm = 4000; loop = 4; }
+    else { target = Math.sin(s*2*Math.PI*0.8) > 0 ? 0.75 : 0.16; tps = 0; rpm = 1700; loop = 2; }
+    v += (target - v) * 0.45 + (Math.random()-0.5)*0.02;
+    S.v = Math.max(0, Math.min(1.1, v)); S.tps = tps; S.rpm = rpm + (Math.random()-0.5)*80;
+    S.loop = loop; S.ect = 86; S.stft = loop === 2 ? (on ? -8 : 0) + (Math.random()-0.5)*4 : null; S.ltft = 0;
+    ingest();
+  }, 100);
+}
+
+function stop(){
+  running = false;
+  if (demoTimer){ clearInterval(demoTimer); demoTimer = null; }
+  if (dev && dev.gatt && dev.gatt.connected){ try{ dev.gatt.disconnect(); }catch(e){} }
+  if (wakeLock){ wakeLock.release().catch(()=>{}); wakeLock = null; }
+  pending = null; mode = null; setButtons();
+}
+async function keepAwake(){ try{ if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){} }
+function setButtons(){
+  $('bConnect').disabled = !!mode; $('bDemo').disabled = !!mode; $('bStop').disabled = !mode;
+}
+
+/* ---------- 処理 ---------- */
+function ingest(){
+  const now = performance.now(), v = S.v;
+  const est = estimate(v);
+  const trim = trimOf(S.stft, S.ltft);
+  hist.push({t:now, v, tps:S.tps, afr: est ? est.afr : null, stft:S.stft, trim, loop:S.loop});
+  if (baseRec && (S.ect == null || S.ect >= 70)){
+    const k = binKey(S.rpm, S.tps);
+    if (k){
+      const b = base[k] || (base[k] = {n:0, sv:0, nt:0, st:0});
+      b.n++; b.sv += v;
+      if (S.loop === 2 && trim != null){ b.nt++; b.st += trim; }
+      if (++baseTick % 50 === 0) saveBase();
+    }
+  }
+  ctrlJ = judgeCtrl(now);
+  while (hist.length && now - hist[0].t > 30000) hist.shift();
+
+  const side = v > 0.45;
+  if (lastSide !== null && side !== lastSide) cross.push(now);
+  lastSide = side;
+  while (cross.length && now - cross[0] > 10000) cross.shift();
+
+  const tpsTh = +$('iTps').value, vTh = +$('iV').value, dur = +$('iDur').value * 1000;
+  if (S.tps != null && S.tps >= tpsTh && v < vTh){
+    if (leanStart == null) leanStart = now;
+    if (!leanActive && now - leanStart >= dur){
+      leanActive = true; leanN++;
+      if (navigator.vibrate) navigator.vibrate(300);
+    }
+  } else { leanStart = null; leanActive = false; }
+
+  const rV = +$('iRV').value, rDur = +$('iRDur').value * 1000;
+  if (v >= rV){
+    if (richStart == null) richStart = now;
+    if (!richActive && now - richStart >= rDur){
+      richActive = true; richN++;
+      if (navigator.vibrate) navigator.vibrate([120,80,120]);
+    }
+  } else { richStart = null; richActive = false; }
+
+  if (rec){
+    const e = est;
+    recData.push([new Date().toISOString(), v.toFixed(3),
+      e ? e.afr.toFixed(2) : '', e ? (e.reliable ? 1 : 0) : '',
+      S.rpm != null ? Math.round(S.rpm) : '', S.tps != null ? S.tps.toFixed(1) : '',
+      S.ect != null ? S.ect : '', S.loop != null ? (LOOP[S.loop] || S.loop) : '',
+      S.stft != null ? S.stft.toFixed(1) : '', S.ltft != null ? S.ltft.toFixed(1) : '',
+      leanActive ? 1 : 0, richActive ? 1 : 0, ctrlJ.lv]);
+    $('recInfo').textContent = recData.length + '件';
+  }
+  if (!drawQueued){ drawQueued = true; requestAnimationFrame(() => { drawQueued = false; render(); }); }
+}
+
+function judgeCtrl(now){
+  const keys = Object.keys(base);
+  if (!keys.length) return {lv:'none', t:'基準データ未記録'};
+  if (baseRec) return {lv:'none', t:'基準を記録中'};
+  const k = binKey(S.rpm, S.tps), b = k && base[k];
+  if (!b || b.n < 20) return {lv:'none', t:'この領域の基準なし'};
+  const rc = hist.filter(h => now - h.t <= 2000);
+  if (S.loop === 2){
+    const tr = rc.filter(h => h.loop === 2 && h.trim != null);
+    if (b.nt < 10 || tr.length < 5) return {lv:'none', t:'判定不可：補正の基準不足'};
+    const d = tr.reduce((a,h) => a + h.trim, 0) / tr.length - b.st / b.nt;
+    if (d <= -5) return {lv:'on', t:'介入あり：ECU補正' + d.toFixed(0) + '%'};
+    if (d <= -2.5) return {lv:'maybe', t:'介入の可能性：補正' + d.toFixed(1) + '%'};
+    return {lv:'off', t:'介入なし（補正は基準並み）'};
+  }
+  const bv = b.sv / b.n, av = rc.reduce((a,h) => a + h.v, 0) / rc.length;
+  if (bv >= 0.82 && av >= 0.82) return {lv:'none', t:'判定不可：濃い側で頭打ち'};
+  const dv = av - bv;
+  if (dv >= 0.08) return {lv:'on', t:'介入あり：基準より+' + dv.toFixed(2) + 'V'};
+  if (dv >= 0.04) return {lv:'maybe', t:'介入の可能性：基準より' + '+' + dv.toFixed(2) + 'V'};
+  return {lv:'off', t:'介入なし（電圧は基準並み）'};
+}
+function baseInfo(){
+  const n = Object.values(base).filter(b => b.n >= 20).length;
+  $('baseInfo').textContent = '基準：' + n + '/50領域';
+}
+
+function render(){
+  $('ctrl').dataset.lv = ctrlJ.lv; $('ctrlT').textContent = ctrlJ.t;
+  if (baseRec) baseInfo();
+  const v = S.v, e = estimate(v);
+  const hero = $('hero'), big = $('big'), tag = $('tag');
+  if (!e){ big.textContent = '--'; big.classList.remove('approx'); $('judge').textContent = '待機中'; hero.dataset.side = 'none'; tag.style.visibility = 'hidden'; }
+  else {
+    big.textContent = (e.clip === 'min' ? '≤' : e.clip === 'max' ? '≥' : '') + e.afr.toFixed(1);
+    big.classList.toggle('approx', !e.reliable);
+    $('judge').textContent = e.afr < 14.3 ? 'リッチ' : e.afr > 15.0 ? 'リーン' : (v > 0.45 ? 'ややリッチ' : 'ややリーン');
+    hero.dataset.side = v > 0.45 ? 'rich' : 'lean';
+    tag.style.visibility = 'visible'; tag.textContent = e.reliable ? '換算範囲内' : '目安値'; tag.classList.toggle('ok', e.reliable);
+  }
+  let cap = 'AFR 12.2〜17.2で表示します。緑の範囲（14.3〜15.0）以外はナローバンドからの目安値です。';
+  const now0 = performance.now(), st = hist.filter(h => now0 - h.t <= 2000 && h.stft != null);
+  const stftAvg = st.length ? st.reduce((a,h) => a + h.stft, 0) / st.length : null;
+  if (S.ect != null && S.ect < 60) cap = '水温が低いうちはO2センサーの出力が当てになりません。';
+  else if (S.loop === 2 && stftAvg != null && stftAvg <= -10) cap = 'ECUが燃料を絞っています（補正' + stftAvg.toFixed(0) + '%）。増量分を打ち消している状態です。';
+  else if (S.loop === 4 && v > 0.6) cap = '高負荷で増量中です。ナローバンドでは濃さの程度までは分かりません。';
+  else if (S.loop === 4 && S.tps != null && S.tps < 5) cap = '減速時の燃料カット中は低電圧になるのが正常です。';
+  $('cap').textContent = cap;
+
+  $('needle').style.left = (e ? (e.afr - AFR_MIN) / (AFR_MAX - AFR_MIN) * 100 : 50) + '%';
+  $('alert').classList.toggle('on', leanActive);
+  $('alertRich').classList.toggle('on', richActive && !leanActive);
+
+  $('cV').textContent = v != null ? v.toFixed(3) + 'V' : '--';
+  $('cRpm').textContent = S.rpm != null ? Math.round(S.rpm).toLocaleString() : '--';
+  $('cTps').textContent = S.tps != null ? S.tps.toFixed(0) + '%' : '--';
+  $('cLoop').textContent = S.loop != null ? (LOOP[S.loop] || ('0x' + S.loop.toString(16))) : '--';
+  $('cStft').textContent = S.stft != null ? (S.stft >= 0 ? '+' : '') + S.stft.toFixed(1) + '%' : '--';
+  $('cEct').textContent = S.ect != null ? S.ect + '℃' : '--';
+  const span = hist.length ? Math.min(10, (hist[hist.length-1].t - hist[0].t) / 1000) : 0;
+  $('cHz').textContent = span > 2 ? (cross.length / 2 / span).toFixed(1) + '回/秒' : '--';
+  const now = performance.now(), recent = hist.filter(h => now - h.t <= 2000);
+  $('cAvg').textContent = recent.length ? (recent.reduce((a,h) => a + h.v, 0) / recent.length).toFixed(2) + 'V' : '--';
+  $('cLeanN').textContent = leanN + ' / ' + richN;
+  draw();
+}
+
+function draw(){
+  const c = $('cv'), dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w*dpr) || c.height !== Math.round(h*dpr)){ c.width = Math.round(w*dpr); c.height = Math.round(h*dpr); }
+  const x = c.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,w,h);
+  const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim();
+  const L = 34, R = 6, T = 6, B = 18, pw = w-L-R, ph = h-T-B;
+  const Y = a => T + ph * (1 - (Math.max(AFR_MIN, Math.min(AFR_MAX, a)) - AFR_MIN) / (AFR_MAX - AFR_MIN));
+  const Yp = f => T + ph * (1 - Math.max(0, Math.min(1, f)));
+  const now = performance.now(), X = t => L + pw * (1 - (now - t) / 30000);
+
+  x.globalAlpha = .08; x.fillStyle = col('--rich'); x.fillRect(L, Y(14.3), pw, Y(AFR_MIN)-Y(14.3));
+  x.fillStyle = col('--lean'); x.fillRect(L, Y(AFR_MAX), pw, Y(15.0)-Y(AFR_MAX));
+  x.globalAlpha = .18; x.fillStyle = col('--ok'); x.fillRect(L, Y(15.0), pw, Y(14.3)-Y(15.0)); x.globalAlpha = 1;
+
+  x.fillStyle = col('--sub'); x.font = '11px system-ui,sans-serif'; x.textAlign = 'right'; x.textBaseline = 'middle';
+  for (const g of [12.2, 14.7, 17.2]) x.fillText(g.toFixed(1), L-5, Y(g));
+  x.strokeStyle = col('--line'); x.setLineDash([4,4]); x.beginPath(); x.moveTo(L, Y(14.7)); x.lineTo(w-R, Y(14.7)); x.stroke(); x.setLineDash([]);
+  x.textBaseline = 'alphabetic'; x.textAlign = 'left'; x.fillText('30秒前', L, h-3); x.textAlign = 'right'; x.fillText('今', w-R, h-3);
+
+  if (hist.length < 2) return;
+  x.beginPath(); let first = true;
+  for (const p of hist){ if (p.tps == null) continue; const px = X(p.t), py = Yp(p.tps/100); if (first){ x.moveTo(px, Yp(0)); first = false; } x.lineTo(px, py); }
+  if (!first){ x.lineTo(X(hist[hist.length-1].t), Yp(0)); x.closePath(); x.globalAlpha = .18; x.fillStyle = col('--sub'); x.fill(); x.globalAlpha = 1; }
+
+  x.beginPath(); let started = false;
+  for (const p of hist){ if (p.afr == null) continue; const px = X(p.t), py = Y(p.afr); started ? x.lineTo(px,py) : x.moveTo(px,py); started = true; }
+  x.strokeStyle = col('--ink'); x.lineWidth = 2; x.lineJoin = 'round'; x.stroke(); x.lineWidth = 1;
+}
+
+function saveCsv(){
+  const head = 'time,o2_v,afr_est,afr_in_range,rpm,tps_pct,ect_c,fuel_mode,stft_pct,ltft_pct,lean_warn,rich_warn,ctrl';
+  const body = recData.map(r => r.map(c => /[",]/.test(String(c)) ? '"' + String(c).replace(/"/g,'""') + '"' : c).join(',')).join('\n');
+  const blob = new Blob(['\ufeff' + head + '\n' + body], {type:'text/csv'});
+  const a = document.createElement('a'), d = new Date();
+  const p = n => String(n).padStart(2,'0');
+  a.href = URL.createObjectURL(blob);
+  a.download = `pcx_o2_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+$('bConnect').onclick = connect;
+$('bDemo').onclick = startDemo;
+$('bStop').onclick = () => { stop(); status('停止しました。'); };
+$('bRec').onclick = () => {
+  rec = !rec;
+  if (rec){ recData = []; $('recInfo').textContent = '0件'; }
+  $('bRec').textContent = rec ? '記録停止' : '記録開始';
+  $('bCsv').disabled = rec || !recData.length;
+};
+$('bCsv').onclick = saveCsv;
+$('bBase').onclick = () => {
+  baseRec = !baseRec;
+  $('bBase').textContent = baseRec ? '基準の記録を停止' : '基準を記録';
+  if (!baseRec) saveBase();
+  baseInfo();
+};
+$('bBaseClr').onclick = () => {
+  if (!Object.keys(base).length) return;
+  if (!confirm('記録した基準データを消去します。元に戻せません。よろしいですか？')) return;
+  base = {}; saveBase(); baseInfo();
+};
+baseInfo();
+$('lgV').style.background = 'var(--ink)'; $('lgT').style.background = 'var(--sub)';
+document.addEventListener('visibilitychange', () => { if (!document.hidden && mode) keepAwake(); });
+window.addEventListener('resize', draw);
+if (!navigator.bluetooth) status('このブラウザはBluetooth接続に対応していません。AndroidはChrome、iPhoneはBluefyで開いてください（デモは動きます）。');
+draw();
+})();
+</script>
+</body>
+</html>
