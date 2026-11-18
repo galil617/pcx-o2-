@@ -48,17 +48,28 @@ button,select,input{font:inherit;color:inherit}
 .hero[data-side="rich"]{--c:var(--rich)}
 .hero[data-side="lean"]{--c:var(--lean)}
 .hero[data-side="ok"]{--c:var(--ok)}
-.read{display:block}
-.dial{position:relative;width:min(100%,310px);height:min(calc(100vw - 62px),310px);margin:4px auto 0}
+.read{display:flex;align-items:stretch;justify-content:center;gap:10px;margin-top:4px}
+.bars{flex:0 0 100px;width:100px;min-width:100px;max-width:100px;overflow:hidden;display:flex;justify-content:space-between;gap:6px}
+.bar{flex:1;display:flex;flex-direction:column;align-items:center;min-width:0}
+.bar .bk{font-size:11px;color:var(--sub);height:1.5em;white-space:nowrap;overflow:hidden;max-width:100%;text-align:center}
+.bar .tr{position:relative;flex:1;width:18px;border:1px solid var(--line);
+  background:repeating-linear-gradient(0deg,rgba(255,138,40,.10) 0 5px,transparent 5px 7px)}
+.bar .fl{position:absolute;left:1px;right:1px;bottom:1px;height:0;transition:height .15s linear;
+  background:repeating-linear-gradient(0deg,var(--hot) 0 5px,transparent 5px 7px);filter:drop-shadow(0 0 4px rgba(255,138,40,.7))}
+.bar .mk{position:absolute;left:-5px;right:-5px;height:0;border-top:1.5px dashed var(--rich)}
+.bar .bv{font-size:12px;height:1.6em;line-height:1.6;white-space:nowrap;color:var(--ink);overflow:hidden;max-width:100%;text-align:center}
+.bar .bu{font-size:10px;height:1.3em;line-height:1.3;color:var(--sub);white-space:nowrap}
+.bar.hot .fl{background:repeating-linear-gradient(0deg,var(--rich) 0 5px,transparent 5px 7px);filter:drop-shadow(0 0 5px rgba(255,77,31,.8))}
+.dial{position:relative;flex:1 1 0;min-width:0;max-width:260px;aspect-ratio:1/1}
 .dial svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
 .big{position:absolute;left:0;right:0;top:46%;transform:translateY(-50%);text-align:center;
-  font-family:var(--dot);font-weight:400;font-size:min(22vw,88px);letter-spacing:0;
+  font-family:var(--dot);font-weight:400;font-size:min(15vw,66px);letter-spacing:0;
   line-height:1;white-space:nowrap;color:#ffe2b0;text-shadow:0 0 18px rgba(255,138,40,.38)}
 .big small{font-size:.4em;margin-left:2px}
 .big.off{opacity:.3;text-shadow:none}
 .big.est{font-style:italic;opacity:.75}
-.side{position:absolute;left:0;right:0;top:64%;text-align:center}
-.sub2{font-size:14px;color:var(--sub);line-height:1.45}
+.side{position:absolute;left:0;right:0;top:63%;text-align:center}
+.sub2{font-size:12px;color:var(--sub);line-height:1.4}
 .judge{font-size:20px;font-weight:400;height:38px;line-height:38px;margin-top:6px;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background-color .2s,padding .2s}
 .judge.hot,.judge.cold{padding:0 12px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
 .hero[data-side] .judge.hot{background:var(--rich);color:#170400;text-shadow:none;animation:flash .9s ease-out 1}
@@ -69,7 +80,7 @@ button,select,input{font:inherit;color:inherit}
 .hero[data-side="ok"] .judge{color:var(--ok)}
 .cap{font-size:13px;color:var(--sub);margin:6px 0 0;line-height:1.6;height:4.8em;overflow:hidden}
 .track{display:none}
-.scale{position:absolute;left:4%;right:4%;bottom:3%;display:flex;justify-content:space-between;font-size:13px;color:var(--sub)}
+.scale{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
 .scale span{white-space:nowrap}
 .scale span:nth-child(2){display:none}
 .capwrap{position:relative;margin-top:6px}
@@ -147,6 +158,11 @@ h2{font-size:16px;font-weight:400;margin:0 0 8px;color:var(--ink);text-shadow:0 
           <div class="sub2" id="sub2">短期燃料補正<br>2秒平均</div>
         </div>
         <div class="scale num"><span id="scL">−25% 濃い</span><span id="scM">0</span><span id="scR">薄い +25%</span></div>
+      </div>
+      <div class="bars" aria-label="開度・回転数・吸気管圧力">
+        <div class="bar" id="bTps"><div class="bk">開度</div><div class="tr"><div class="fl"></div><div class="mk" style="bottom:70%"></div></div><div class="bv num">--</div><div class="bu">%</div></div>
+        <div class="bar" id="bRpm"><div class="bk">回転</div><div class="tr"><div class="fl"></div></div><div class="bv num">--</div><div class="bu">rpm</div></div>
+        <div class="bar" id="bMap"><div class="bk">圧力</div><div class="tr"><div class="fl"></div><div class="mk" style="bottom:90.9%;border-top-color:var(--sub)"></div></div><div class="bv num">--</div><div class="bu">kPa</div></div>
       </div>
     </div>
     <div class="judge" id="judge">待機中</div>
@@ -348,7 +364,7 @@ h2{font-size:16px;font-weight:400;margin:0 0 8px;color:var(--ink);text-shadow:0 
     <summary>通信ログ</summary>
     <pre class="log" id="log"></pre>
   </details>
-  <p class="note" style="text-align:center">版：v21（2026-11-18）</p>
+  <p class="note" style="text-align:center">版：v23（2026-11-18）</p>
 </main>
 
 <script>
@@ -893,6 +909,11 @@ function render(){
   nd.style.left = (gp != null ? (Math.max(-RANGE, Math.min(RANGE, gp)) + RANGE) / (2*RANGE) * 100 : 50) + '%';
   nd.classList.toggle('off', gp == null);
   setRing(gp);
+  const setBar = (id, frac, txt, hot) => { const b = $(id); b.querySelector('.fl').style.height = (frac == null ? 0 : Math.max(0, Math.min(1, frac)) * 100) + '%';
+    b.querySelector('.bv').textContent = txt; b.classList.toggle('hot', !!hot); };
+  setBar('bTps', S.tps != null ? S.tps/100 : null, S.tps != null ? S.tps.toFixed(0) : '--', S.tps != null && S.tps >= 70);
+  setBar('bRpm', S.rpm != null ? S.rpm/10000 : null, S.rpm != null ? String(Math.round(S.rpm/10)*10) : '--', S.rpm != null && S.rpm >= 8500);
+  setBar('bMap', S.map != null ? S.map/110 : null, S.map != null ? S.map + '' : '--', false);
   const jt = $('judge').textContent;
   $('judge').classList.toggle('hot', jt.includes('燃料増量中'));
   $('judge').classList.toggle('cold', jt.includes('燃料減量中'));
