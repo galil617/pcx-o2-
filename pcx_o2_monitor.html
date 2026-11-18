@@ -8,9 +8,10 @@
 @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
 :root{
   --bg:#070504;--panel:rgba(255,122,24,.035);--ink:#ffc77a;--hot:#ff8a1c;--sub:rgba(255,176,96,.62);
-  --line:rgba(255,138,40,.26);--rich:#ff4d1f;--lean:#6fd3ff;--ok:#ffb02e;--warn:#ff2e3a;--c:var(--hot);
+  --line:rgba(255,138,40,.26);--rich:#ff4d1f;--lean:#6fd3ff;--ok:#ffb02e;--warn:#ff2e3a;--cut:#5b3478;--cutL:#a77bd6;--c:var(--hot);
+  --min:"DotGothic16","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
   --mono:"DotGothic16",ui-monospace,"SFMono-Regular",Menlo,monospace;--dot:"DotGothic16","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
-  --read:"Hiragino Sans","Noto Sans JP","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  --read:"DotGothic16","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
   color-scheme:dark;box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
 }
@@ -26,7 +27,9 @@ body{margin:0;color:var(--ink);background:
 .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
 main{max-width:560px;margin:0 auto;padding:12px 14px 32px}
 header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-h1{font-size:18px;margin:0;flex:1 0 auto;font-weight:400;white-space:nowrap;letter-spacing:.04em;text-shadow:0 0 10px rgba(255,138,40,.45)}
+h1{font-family:var(--min);font-weight:400;font-size:22px;margin:0;flex:1 0 auto;white-space:nowrap;letter-spacing:-.02em;color:#ff8a1c;text-shadow:0 0 10px rgba(255,106,0,.45)}
+.cn{display:inline-block;transform:scaleX(.78);transform-origin:left center}
+.en{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--sub);margin-left:8px;vertical-align:middle;font-weight:400}
 .link{font-family:var(--mono);font-size:12px;color:var(--sub);display:inline-flex;align-items:center;gap:6px;margin-left:8px;font-weight:400;text-shadow:none}
 .link i{width:7px;height:7px;border-radius:50%;background:var(--sub);display:inline-block}
 .link[data-st="ble"] i{background:var(--ok);box-shadow:0 0 8px var(--ok)}
@@ -48,8 +51,8 @@ button,select,input{font:inherit;color:inherit}
 .hero[data-side="rich"]{--c:var(--rich)}
 .hero[data-side="lean"]{--c:var(--lean)}
 .hero[data-side="ok"]{--c:var(--ok)}
-.read{display:flex;align-items:stretch;justify-content:center;gap:10px;margin-top:4px}
-.bars{flex:0 0 100px;width:100px;min-width:100px;max-width:100px;overflow:hidden;display:flex;justify-content:space-between;gap:6px}
+.read{position:relative;margin-top:2px;height:min(calc(100vw - 160px),300px)}
+.bars{position:absolute;right:0;top:0;bottom:0;width:92px;z-index:1;overflow:hidden;display:flex;justify-content:space-between;gap:6px}
 .bar{flex:1;display:flex;flex-direction:column;align-items:center;min-width:0}
 .bar .bk{font-size:11px;color:var(--sub);height:1.5em;white-space:nowrap;overflow:hidden;max-width:100%;text-align:center}
 .bar .tr{position:relative;flex:1;width:18px;border:1px solid var(--line);
@@ -57,36 +60,40 @@ button,select,input{font:inherit;color:inherit}
 .bar .fl{position:absolute;left:1px;right:1px;bottom:1px;height:0;transition:height .15s linear;
   background:repeating-linear-gradient(0deg,var(--hot) 0 5px,transparent 5px 7px);filter:drop-shadow(0 0 4px rgba(255,138,40,.7))}
 .bar .mk{position:absolute;left:-5px;right:-5px;height:0;border-top:1.5px dashed var(--rich)}
-.bar .bv{font-size:12px;height:1.6em;line-height:1.6;white-space:nowrap;color:var(--ink);overflow:hidden;max-width:100%;text-align:center}
+.bar .bv{font-size:11px;letter-spacing:-.04em;height:1.7em;line-height:1.7;white-space:nowrap;color:var(--ink);overflow:hidden;max-width:100%;text-align:center}
 .bar .bu{font-size:10px;height:1.3em;line-height:1.3;color:var(--sub);white-space:nowrap}
 .bar.hot .fl{background:repeating-linear-gradient(0deg,var(--rich) 0 5px,transparent 5px 7px);filter:drop-shadow(0 0 5px rgba(255,77,31,.8))}
-.dial{position:relative;flex:1 1 0;min-width:0;max-width:260px;aspect-ratio:1/1}
+.dial{position:absolute;left:0;top:0;height:100%;aspect-ratio:1/1}
 .dial svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-.big{position:absolute;left:0;right:0;top:46%;transform:translateY(-50%);text-align:center;
-  font-family:var(--dot);font-weight:400;font-size:min(15vw,66px);letter-spacing:0;
+.big{position:absolute;left:30%;right:3%;top:73%;transform:translateY(-50%);text-align:right;
+  font-family:var(--dot);font-weight:400;font-size:min(11vw,46px);letter-spacing:0;
   line-height:1;white-space:nowrap;color:#ffe2b0;text-shadow:0 0 18px rgba(255,138,40,.38)}
 .big small{font-size:.4em;margin-left:2px}
 .big.off{opacity:.3;text-shadow:none}
 .big.est{font-style:italic;opacity:.75}
-.side{position:absolute;left:0;right:0;top:63%;text-align:center}
-.sub2{font-size:12px;color:var(--sub);line-height:1.4}
-.judge{font-size:20px;font-weight:400;height:38px;line-height:38px;margin-top:6px;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background-color .2s,padding .2s}
+.side{position:absolute;left:40%;right:3%;top:84%;text-align:right}
+.sub2{font-size:10px;color:var(--sub);line-height:1.35;border-top:1px solid rgba(255,106,0,.5);padding-top:2px}
+.judge{font-family:var(--min);font-weight:400;font-size:21px;letter-spacing:0;height:38px;line-height:38px;margin-top:6px;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background-color .2s,padding .2s}
+.jsub{font-size:.6em;margin-left:8px;letter-spacing:.06em;vertical-align:.12em}
 .judge.hot,.judge.cold{padding:0 12px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
 .hero[data-side] .judge.hot{background:var(--rich);color:#170400;text-shadow:none;animation:flash .9s ease-out 1}
-.hero[data-side] .judge.cold{background:var(--lean);color:#02121a;text-shadow:none;animation:flash .9s ease-out 1}
+.hero[data-side] .judge.cold{background:var(--cut);color:#ead9ff;text-shadow:none;animation:flash .9s ease-out 1}
+.hero[data-side="cut"]{--c:var(--cutL)}
 @keyframes flash{0%{filter:brightness(1.8)}100%{filter:none}}
 .hero[data-side="rich"] .judge{color:var(--rich);text-shadow:0 0 10px rgba(255,77,31,.45)}
 .hero[data-side="lean"] .judge{color:var(--lean);text-shadow:0 0 10px rgba(111,211,255,.4)}
 .hero[data-side="ok"] .judge{color:var(--ok)}
 .cap{font-size:13px;color:var(--sub);margin:6px 0 0;line-height:1.6;height:4.8em;overflow:hidden}
 .track{display:none}
-.scale{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.scale{display:none;position:absolute;left:0;right:0;bottom:0;justify-content:space-between;font-size:12px;color:var(--sub)}
 .scale span{white-space:nowrap}
 .scale span:nth-child(2){display:none}
 .capwrap{position:relative;margin-top:6px}
 .capwrap .cap{margin:0;font-family:var(--read)}
 .alert{position:absolute;inset:0;display:flex;align-items:center;padding:0 14px;font-weight:400;font-size:16px;line-height:1.45;overflow:hidden;visibility:hidden;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
 .alert.on{visibility:visible}
+.alert{font-family:var(--min);font-weight:400;letter-spacing:-.02em;padding-left:22px}
+.alert::before{content:"";position:absolute;left:0;top:0;bottom:0;width:12px;background:repeating-linear-gradient(-45deg,#140400 0 5px,transparent 5px 10px)}
 .alert.rich{background:var(--rich);color:#170400;box-shadow:0 0 22px rgba(255,77,31,.55)}
 .alert.lean{background:var(--lean);color:#02121a;box-shadow:0 0 22px rgba(111,211,255,.45)}
 .ctrl{display:flex;align-items:center;gap:8px;height:28px;margin-top:8px;font-size:14px;font-weight:400;white-space:nowrap;overflow:hidden}
@@ -103,7 +110,10 @@ button,select,input{font:inherit;color:inherit}
 .cell:nth-child(3n){border-right:0}
 .cell:nth-last-child(-n+3){border-bottom:0}
 .cell{transition:background-color .2s}
-.cell.alarm{background:var(--warn);box-shadow:inset 0 0 18px rgba(0,0,0,.35)}
+.cell.alarm{background:var(--warn);box-shadow:inset 0 0 18px rgba(0,0,0,.35);animation:blink .5s steps(1,end) infinite}
+@keyframes blink{0%{background:var(--warn)}50%{background:#5a0a0e}}
+.cell.alarm .k,.cell.alarm .v{animation:blinkT .5s steps(1,end) infinite}
+@keyframes blinkT{0%{color:#1a0203}50%{color:#ffb4a8}}
 .cell.alarm .k,.cell.alarm .v{color:#1a0203;text-shadow:none}
 .cell .k{font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cell .v{font-size:20px;line-height:1.3;height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono)}
@@ -124,7 +134,7 @@ summary::before{content:"";display:inline-block;width:0;height:0;border-left:6px
 details[open]>summary::before{transform:rotate(90deg)}
 pre.log{font-size:11px;max-height:220px;overflow:auto;white-space:pre-wrap;color:var(--sub);margin:8px 0 0;font-family:var(--mono)}
 .note{font-size:13px;color:var(--sub);margin:8px 0 0;font-family:var(--read)}
-h2{font-size:16px;font-weight:400;margin:0 0 8px;color:var(--ink);text-shadow:0 0 8px rgba(255,138,40,.35)}
+h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#ff8a1c;letter-spacing:-.02em;border-left:5px solid #ff6a00;padding-left:8px;line-height:1.25}
 .man h3{font-size:15px;font-weight:400;margin:16px 0 4px;color:var(--hot)}
 .man p,.man li{font-size:13px;line-height:1.7;font-family:var(--read)}
 .man p{margin:4px 0}
@@ -142,7 +152,7 @@ h2{font-size:16px;font-weight:400;margin:0 0 8px;color:var(--ink);text-shadow:0 
 <body>
 <main>
   <header>
-    <h1>PCX 燃調モニター<span class="link" id="link" data-st=""><i></i><span id="linkT">未接続</span></span></h1>
+    <h1>PCX 燃調監視<span class="link" id="link" data-st=""><i></i><span id="linkT">未接続</span></span></h1>
     <button class="btn primary" id="bConnect">ELM327に接続</button>
     <button class="btn" id="bDemo">デモ</button>
     <button class="btn" id="bStop" disabled>停止</button>
@@ -168,8 +178,8 @@ h2{font-size:16px;font-weight:400;margin:0 0 8px;color:var(--ink);text-shadow:0 
     <div class="judge" id="judge">待機中</div>
     <div class="capwrap">
     <p class="cap" id="cap">O2制御中は、ECUの燃料補正から濃さの傾向が分かります。マイナスはECUが燃料を減らしている（補正前は濃い）状態です。</p>
-      <div class="alert rich" id="alertRich">濃い警告：ECUが大きく減量し続けています</div>
-      <div class="alert lean" id="alertLean">薄い警告：ECUが大きく増量し続けています</div>
+      <div class="alert rich" id="alertRich">警告　ECUが大きく減量し続けています</div>
+      <div class="alert lean" id="alertLean">警告　ECUが大きく増量し続けています</div>
     </div>
     <div class="track"><div class="needle off" id="needle"></div></div>
     <div class="ctrl" id="ctrl" data-lv="none"><i></i><b>介入判定</b><span id="ctrlT">基準データ未記録</span></div>
@@ -198,7 +208,7 @@ h2{font-size:16px;font-weight:400;margin:0 0 8px;color:var(--ink);text-shadow:0 
   </div>
 
   <div class="box">
-    <h2>記録</h2>
+    <h2>記録<span class="en">DATA LOG</span></h2>
     <div class="row">
       <button class="btn" id="bRec">記録開始</button>
       <button class="btn" id="bCsv" disabled>CSVを保存</button>
@@ -209,7 +219,7 @@ h2{font-size:16px;font-weight:400;margin:0 0 8px;color:var(--ink);text-shadow:0 
   </div>
 
   <div class="box">
-    <h2>コントローラー介入の判定</h2>
+    <h2>コントローラー介入の判定<span class="en">INTERVENTION</span></h2>
     <div class="row">
       <button class="btn" id="bBase">基準を記録</button>
       <button class="btn" id="bBaseClr">基準を消去</button>
@@ -219,7 +229,7 @@ h2{font-size:16px;font-weight:400;margin:0 0 8px;color:var(--ink);text-shadow:0 
   </div>
 
   <div class="box">
-    <h2>O2制御が外れる開度</h2>
+    <h2>O2制御が外れる開度<span class="en">OPEN LOOP ENTRY</span></h2>
     <p class="note num" id="olSum" style="margin-top:0">まだ記録がありません。O2制御中から加速して「高負荷」に切り替わると自動で記録します。</p>
     <canvas id="olCv" style="height:170px"></canvas>
     <div class="legend"><span>横：開度（%）</span><span>縦：回転数</span><span>点線：70%</span></div>
@@ -231,7 +241,7 @@ h2{font-size:16px;font-weight:400;margin:0 0 8px;color:var(--ink);text-shadow:0 
   </div>
 
   <details class="box man" id="manual">
-    <summary>説明書</summary>
+    <summary><span style="font-family:var(--min);font-weight:400;font-size:17px;color:#ff8a1c">説明書</span><span class="en">MANUAL</span></summary>
 
     <h3>今日の推奨段階</h3>
     <div class="rec num" id="recBox">外気温を取得すると表示します。</div>
@@ -287,7 +297,7 @@ h2{font-size:16px;font-weight:400;margin:0 0 8px;color:var(--ink);text-shadow:0 
     <h3>画面の見方</h3>
     <ul>
       <li>大きな数字：O2制御中は仮想空燃比（ECUが補正しなかった場合の空燃比、14.7×（1＋補正値））。高負荷中は斜体の想定値。</li>
-      <li>補正のマイナスは「ECUが燃料を減らしている＝補正前は濃い」。±3%以内なら狙いどおり。</li>
+      <li>補正のマイナスは「ECUが燃料を減らしている＝補正前は濃い」。±3%以内なら「理論空燃比 Stoichiometry」と表示（理論空燃比付近）。</li>
       <li>介入判定：基準データと比べてO2制御中の補正がマイナスに動いていれば、コントローラーが効いている。</li>
       <li>推定増量：実際の吸気温とECUが読む吸気温の比から計算した値。</li>
     </ul>
@@ -301,7 +311,7 @@ h2{font-size:16px;font-weight:400;margin:0 0 8px;color:var(--ink);text-shadow:0 
   </details>
 
   <details class="box">
-    <summary>設定</summary>
+    <summary><span style="font-family:var(--min);font-weight:400;font-size:17px;color:#ff8a1c">設定</span><span class="en">CONFIG</span></summary>
     <div class="row" style="margin-top:10px">
       <label class="field">メイン表示
         <select id="sDisp">
@@ -361,10 +371,10 @@ h2{font-size:16px;font-weight:400;margin:0 0 8px;color:var(--ink);text-shadow:0 
   </details>
 
   <details class="box">
-    <summary>通信ログ</summary>
+    <summary><span style="font-family:var(--min);font-weight:400;font-size:17px;color:#ff8a1c">通信ログ</span><span class="en">COMM LOG</span></summary>
     <pre class="log" id="log"></pre>
   </details>
-  <p class="note" style="text-align:center">版：v23（2026-11-18）</p>
+  <p class="note" style="text-align:center">版：v34（2026-11-19）</p>
 </main>
 
 <script>
@@ -375,6 +385,10 @@ const RANGE = 25, STOICH = 14.7;
 const vafr = pct => STOICH * (1 + pct/100);
 const isAfr = () => $('sDisp').value === 'afr';
 function setScale(){
+  const l = document.getElementById('rgL'), r = document.getElementById('rgR');
+  if (l && r){ l.textContent = isAfr() ? vafr(-RANGE).toFixed(1) : '−25'; r.textContent = isAfr() ? vafr(RANGE).toFixed(1) : '+25'; }
+  if (typeof MAJ !== 'undefined') MAJ.forEach((v, i) => { const t = document.getElementById('mn' + i);
+    if (t) t.textContent = isAfr() ? vafr(v).toFixed(1) : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v); });
   if (isAfr()){ $('scL').textContent = vafr(-RANGE).toFixed(1) + ' 濃い'; $('scM').textContent = '14.7'; $('scR').textContent = '薄い ' + vafr(RANGE).toFixed(1); }
   else { $('scL').textContent = '−25% 濃い'; $('scM').textContent = '0'; $('scR').textContent = '薄い +25%'; }
 }
@@ -637,34 +651,78 @@ function setButtons(){
 }
 /* ---------- 円形ゲージ ---------- */
 const NS = 'http://www.w3.org/2000/svg';
-const ang = v => (135 + (Math.max(-RANGE, Math.min(RANGE, v)) + RANGE) / (2*RANGE) * 270) * Math.PI / 180;
+const A0 = 118, SWEEP = 252;
+const angDeg = v => A0 + (Math.max(-RANGE, Math.min(RANGE, v)) + RANGE) / (2*RANGE) * SWEEP;
+const ang = v => angDeg(v) * Math.PI / 180;
 function mk(tag, at){ const e = document.createElementNS(NS, tag); for (const k in at) e.setAttribute(k, at[k]); return e; }
+const MAJ = [-25,-20,-15,-10,-5,0,5,10,15,20,25];
+const CX = 100, CY = 100;
+const PT = (r, a) => [CX + r*Math.cos(a), CY + r*Math.sin(a)];
+const arcD = (v0, v1, r) => { const a0 = ang(v0), a1 = ang(v1), p0 = PT(r, a0), p1 = PT(r, a1);
+  const sw = a1 >= a0 ? 1 : 0, big = Math.abs(a1 - a0) > Math.PI ? 1 : 0;
+  return 'M' + p0[0].toFixed(2) + ' ' + p0[1].toFixed(2) + ' A' + r + ' ' + r + ' 0 ' + big + ' ' + sw + ' ' + p1[0].toFixed(2) + ' ' + p1[1].toFixed(2); };
 function buildRing(){
   const g = $('ring');
-  const arc = (v0, v1, r) => { const a0 = ang(v0), a1 = ang(v1);
-    return 'M' + (100 + r*Math.cos(a0)) + ' ' + (100 + r*Math.sin(a0)) + ' A' + r + ' ' + r + ' 0 ' + ((a1 - a0) > Math.PI ? 1 : 0) + ' 1 ' + (100 + r*Math.cos(a1)) + ' ' + (100 + r*Math.sin(a1)); };
-  g.appendChild(mk('path', {d:arc(-25, 25, 96), fill:'none', stroke:'var(--line)', 'stroke-width':1}));
-  g.appendChild(mk('path', {d:arc(-25, -3, 89), fill:'none', stroke:'var(--rich)', 'stroke-width':5, opacity:.6}));
-  g.appendChild(mk('path', {d:arc(-3, 3, 89), fill:'none', stroke:'var(--ok)', 'stroke-width':5}));
-  g.appendChild(mk('path', {d:arc(3, 25, 89), fill:'none', stroke:'var(--lean)', 'stroke-width':5, opacity:.6}));
+  const sector = (v0, v1, ri, ro) => { const a0 = ang(v0), a1 = ang(v1), big = (a1 - a0) > Math.PI ? 1 : 0;
+    const A = PT(ro, a0), B = PT(ro, a1), C = PT(ri, a1), D = PT(ri, a0);
+    return 'M' + A + ' A' + ro + ' ' + ro + ' 0 ' + big + ' 1 ' + B + ' L' + C + ' A' + ri + ' ' + ri + ' 0 ' + big + ' 0 ' + D + ' Z'; };
+  const defs = mk('defs', {});
+  const f = mk('filter', {id:'glow', x:'-50%', y:'-50%', width:'200%', height:'200%'});
+  f.appendChild(mk('feGaussianBlur', {stdDeviation:2, result:'b'}));
+  const m = mk('feMerge', {}); m.appendChild(mk('feMergeNode', {in:'b'})); m.appendChild(mk('feMergeNode', {in:'SourceGraphic'}));
+  f.appendChild(m); defs.appendChild(f);
+  const rg = mk('radialGradient', {id:'face', cx:'42%', cy:'40%', r:'65%'});
+  rg.appendChild(mk('stop', {offset:'0%', 'stop-color':'#2b1004'})); rg.appendChild(mk('stop', {offset:'100%', 'stop-color':'#040201'}));
+  defs.appendChild(rg);
+  defs.appendChild(mk('path', {id:'lblArc', d:arcD(-25, 25, 44)}));
+  g.appendChild(defs);
+  // 文字盤（外周は一部だけ太い弧で囲む非対称デザイン）
+  g.appendChild(mk('circle', {cx:CX, cy:CY, r:98, fill:'url(#face)', stroke:'rgba(255,106,0,.25)', 'stroke-width':1}));
+  g.appendChild(mk('path', {d:arcD(1.5, 25, 98), fill:'none', stroke:'#ff6a00', 'stroke-width':1.2, opacity:.7}));
+  g.appendChild(mk('path', {d:arcD(-25, 1.5, 98), fill:'none', stroke:'#ff6a00', 'stroke-width':3.5, opacity:.9}));
+  { const a = ang(1.5), p1 = PT(94.5, a), p2 = PT(100.5, a);
+    g.appendChild(mk('line', {x1:p1[0], y1:p1[1], x2:p2[0], y2:p2[1], stroke:'#ff6a00', 'stroke-width':1.6})); }
+  // 区間の帯（薄い色）
+  const zones = [[-25,-3,'RICH','rgba(255,77,31,.22)'],[-3,3,'OPTIMAL','rgba(255,176,46,.38)'],[3,25,'LEAN','rgba(111,211,255,.18)']];
+  for (const [v0, v1, , fill] of zones) g.appendChild(mk('path', {d:sector(v0, v1, 50, 60), fill, stroke:'rgba(255,140,40,.55)', 'stroke-width':.8}));
+  for (const v of [-3, 3]){ const a = ang(v), p1 = PT(48, a), p2 = PT(84, a);
+    g.appendChild(mk('line', {x1:p1[0], y1:p1[1], x2:p2[0], y2:p2[1], stroke:'#ffb347', 'stroke-width':1.6})); }
+  // 現在値までの発光する弧（中央値→現在値）
+  g.appendChild(mk('path', {id:'fillArc', d:'', fill:'none', stroke:'#ff8a1c', 'stroke-width':6, 'stroke-linecap':'butt', filter:'url(#glow)', opacity:.9}));
+  // 目盛り
+  const tk = mk('g', {filter:'url(#glow)'});
   for (let v = -25; v <= 25; v++){
-    const a = ang(v), major = v % 5 === 0, r1 = major ? 70 : 74, r2 = 82;
-    g.appendChild(mk('line', {x1:100 + r1*Math.cos(a), y1:100 + r1*Math.sin(a), x2:100 + r2*Math.cos(a), y2:100 + r2*Math.sin(a),
-      stroke: major ? 'var(--ink)' : 'var(--sub)', 'stroke-width': major ? 1.6 : 0.8, opacity: major ? .9 : .6}));
+    const a = ang(v), major = v % 5 === 0, p1 = PT(major ? 64 : 71, a), p2 = PT(82, a);
+    tk.appendChild(mk('line', {x1:p1[0], y1:p1[1], x2:p2[0], y2:p2[1], stroke:'#ffb347', 'stroke-width': major ? 3 : 1.6, opacity: major ? 1 : .75}));
   }
-
-  const ptr = mk('g', {id:'ptr', opacity:.25});
-  ptr.appendChild(mk('path', {d:'M100 18 L93 4 L107 4 Z', fill:'#ffe2b0'}));
-  ptr.appendChild(mk('line', {x1:100, y1:18, x2:100, y2:32, stroke:'#ffe2b0', 'stroke-width':3}));
-  ptr.style.filter = 'drop-shadow(0 0 4px rgba(255,138,40,.9))';
-  ptr.style.transformOrigin = '100px 100px';
-  ptr.style.transition = 'transform .25s ease-out';
+  g.appendChild(tk);
+  MAJ.forEach((v, i) => { const q = PT(90.5, ang(v));
+    g.appendChild(mk('text', {id:'mn' + i, x:q[0], y:q[1] + 3, fill:'#ffd59a', 'font-size':8, 'text-anchor':'middle', style:'font-family:var(--dot)'})); });
+  // 区間名
+  const off = v => ((v + 25) / 50 * 100) + '%';
+  for (const [v0, v1, name] of zones){
+    const t = mk('text', {fill:'#ffc77a', 'font-size': name === 'OPTIMAL' ? 6.5 : 8.5, 'letter-spacing': name === 'OPTIMAL' ? .2 : 1.6, 'text-anchor':'middle', style:'font-family:var(--dot)'});
+    const tp = mk('textPath', {href:'#lblArc', startOffset:off((v0 + v1)/2)}); tp.textContent = name; t.appendChild(tp); g.appendChild(t);
+  }
+  // 中心軸を示す斜めの線と小さなラベル
+  const ax0 = PT(18, ang(0) + Math.PI), ax1 = PT(40, ang(0));
+  g.appendChild(mk('line', {x1:ax0[0], y1:ax0[1], x2:ax1[0], y2:ax1[1], stroke:'rgba(255,106,0,.35)', 'stroke-width':.8, 'stroke-dasharray':'2 2'}));
+  const lb = mk('text', {x:0, y:12, fill:'#ff8a1c', 'font-size':11, style:'font-family:var(--min);font-weight:400'}); lb.textContent = '空燃比'; g.appendChild(lb);
+  const lb2 = mk('text', {x:0, y:20, fill:'rgba(255,176,96,.7)', 'font-size':5.5, 'letter-spacing':1, style:'font-family:var(--dot)'}); lb2.textContent = 'AIR / FUEL'; g.appendChild(lb2);
+  // 針（短めのマーカー）
+  const ptr = mk('g', {id:'ptr', opacity:.35});
+  ptr.appendChild(mk('path', {d:'M' + (CX+30) + ' ' + CY + ' L' + (CX+86) + ' ' + (CY-2.4) + ' L' + (CX+86) + ' ' + (CY+2.4) + ' Z', fill:'#fff1d6', filter:'url(#glow)'}));
+  ptr.style.transformOrigin = CX + 'px ' + CY + 'px';
+  ptr.style.transition = 'transform .3s cubic-bezier(.3,1.4,.6,1)';
   g.appendChild(ptr);
+  g.appendChild(mk('circle', {cx:CX, cy:CY, r:5, fill:'#140a04', stroke:'rgba(255,179,71,.6)', 'stroke-width':1.2}));
+  setScale();
 }
 function setRing(v){
-  const p = document.getElementById('ptr'); if (!p) return;
-  const deg = v == null ? 0 : (Math.max(-RANGE, Math.min(RANGE, v)) / RANGE) * 135;
-  p.style.transform = 'rotate(' + deg + 'deg)'; p.setAttribute('opacity', v == null ? .25 : 1);
+  const p = document.getElementById('ptr'), fa = document.getElementById('fillArc'); if (!p) return;
+  const vv = v == null ? 0 : Math.max(-RANGE, Math.min(RANGE, v));
+  p.style.transform = 'rotate(' + angDeg(vv) + 'deg)'; p.setAttribute('opacity', v == null ? .25 : 1);
+  if (fa) fa.setAttribute('d', v == null || Math.abs(vv) < .3 ? '' : (vv > 0 ? arcD(0, vv, 75) : arcD(vv, 0, 75)));
 }
 
 /* ---------- 処理 ---------- */
@@ -868,10 +926,11 @@ function render(){
     let j, side;
     if (a <= -10){ j = '濃い：ECUが大きく減量'; side = 'rich'; }
     else if (a <= -3){ j = 'やや濃い：ECUが減量'; side = 'rich'; }
-    else if (a < 3){ j = 'ほぼ狙いどおり'; side = 'ok'; }
+    else if (a < 3){ j = '理論空燃比 Stoichiometry'; side = 'ok'; }
     else if (a < 10){ j = 'やや薄い：ECUが増量'; side = 'lean'; }
     else { j = '薄い：ECUが大きく増量'; side = 'lean'; }
     $('judge').textContent = j; hero.dataset.side = side;
+    if (j.startsWith('理論空燃比')) $('judge').innerHTML = '理論空燃比<span class="jsub">Stoichiometry</span>';
     $('sub2').innerHTML = isAfr() ? '仮想空燃比<br>補正 ' + (a > 0 ? '+' : a < 0 ? '−' : '') + Math.abs(a).toFixed(1) + '%' : '短期燃料補正<br>2秒平均';
   } else {
     const oe = openEst();
@@ -882,7 +941,7 @@ function render(){
       let j, side;
       if (mism){ j = 'オープンループ　増量を確認できず'; side = 'none'; }
       else if (oe.add >= 0.5){ j = 'オープンループ　燃料増量中'; side = 'rich'; }
-      else if (oe.add <= -0.5){ j = 'オープンループ　燃料減量中'; side = 'lean'; }
+      else if (oe.add <= -0.5){ j = 'オープンループ　燃料減量中'; side = 'cut'; }
       else { j = 'オープンループ　増量なし'; side = 'ok'; }
       $('judge').textContent = j; hero.dataset.side = side;
       $('sub2').innerHTML = '想定空燃比<br>増量 ' + (oe.add >= 0 ? '+' : '−') + Math.abs(oe.add).toFixed(1) + '%';
@@ -913,7 +972,7 @@ function render(){
     b.querySelector('.bv').textContent = txt; b.classList.toggle('hot', !!hot); };
   setBar('bTps', S.tps != null ? S.tps/100 : null, S.tps != null ? S.tps.toFixed(0) : '--', S.tps != null && S.tps >= 70);
   setBar('bRpm', S.rpm != null ? S.rpm/10000 : null, S.rpm != null ? String(Math.round(S.rpm/10)*10) : '--', S.rpm != null && S.rpm >= 8500);
-  setBar('bMap', S.map != null ? S.map/110 : null, S.map != null ? S.map + '' : '--', false);
+  setBar('bMap', S.map != null ? S.map/110 : null, S.map != null ? String(Math.round(S.map)) : '--', false);
   const jt = $('judge').textContent;
   $('judge').classList.toggle('hot', jt.includes('燃料増量中'));
   $('judge').classList.toggle('cold', jt.includes('燃料減量中'));
@@ -927,7 +986,7 @@ function render(){
   $('cStft').textContent = S.stft != null && cl ? sg(S.stft) : '--';
   $('cRpm').textContent = S.rpm != null ? Math.round(S.rpm).toLocaleString() : '--';
   $('cTps').textContent = S.tps != null ? S.tps.toFixed(0) + '%' : '--';
-  $('cMap').textContent = S.map != null ? S.map + 'kPa' : '--';
+  $('cMap').textContent = S.map != null ? Math.round(S.map) + 'kPa' : '--';
   $('cLoad').textContent = S.load != null ? S.load.toFixed(0) + '%' : '--';
   $('cEct').textContent = S.ect != null ? S.ect + '℃' : '--';
   $('cIat').textContent = S.iat != null ? S.iat + '℃' : '--';
@@ -1020,7 +1079,7 @@ $('bBaseClr').onclick = () => {
   base = {}; saveBase(); baseInfo();
 };
 baseInfo();
-buildRing(); setButtons();
+buildRing(); setRing(null); setButtons();
 $('bOlClr').onclick = () => {
   if (!olEv.length) return;
   if (!confirm('O2制御が外れた開度の記録（' + olEv.length + '回分）を消去します。元に戻せません。よろしいですか？')) return;
