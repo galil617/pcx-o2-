@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>PCX 燃調モニター</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
 :root{
   --bg:#070504;--panel:rgba(255,122,24,.035);--ink:#ffc77a;--hot:#ff8a1c;--sub:rgba(255,176,96,.62);
   --line:rgba(255,138,40,.26);--rich:#ff4d1f;--lean:#6fd3ff;--ok:#ffb02e;--warn:#ff2e3a;--c:var(--hot);
-  --mono:"Share Tech Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --mono:"DotGothic16",ui-monospace,"SFMono-Regular",Menlo,monospace;--dot:"DotGothic16","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --read:"Hiragino Sans","Noto Sans JP","Yu Gothic UI","Meiryo",system-ui,sans-serif;
   color-scheme:dark;box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
 }
@@ -20,22 +21,22 @@ body{margin:0;color:var(--ink);background:
   repeating-linear-gradient(90deg,rgba(255,138,40,.035) 0 1px,transparent 1px 28px),
   radial-gradient(120% 70% at 50% 0%,#1a0c03 0%,var(--bg) 60%);
   background-attachment:fixed;
-  font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  font-family:var(--dot);
   font-size:15px;line-height:1.6;-webkit-text-size-adjust:100%}
 .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
 main{max-width:560px;margin:0 auto;padding:12px 14px 32px}
 header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-h1{font-size:17px;margin:0;flex:1 0 auto;font-weight:700;white-space:nowrap;letter-spacing:.04em;text-shadow:0 0 10px rgba(255,138,40,.45)}
+h1{font-size:18px;margin:0;flex:1 0 auto;font-weight:400;white-space:nowrap;letter-spacing:.04em;text-shadow:0 0 10px rgba(255,138,40,.45)}
 .link{font-family:var(--mono);font-size:12px;color:var(--sub);display:inline-flex;align-items:center;gap:6px;margin-left:8px;font-weight:400;text-shadow:none}
 .link i{width:7px;height:7px;border-radius:50%;background:var(--sub);display:inline-block}
 .link[data-st="ble"] i{background:var(--ok);box-shadow:0 0 8px var(--ok)}
 .link[data-st="demo"] i{background:var(--lean);box-shadow:0 0 8px var(--lean)}
 button,select,input{font:inherit;color:inherit}
-.btn{border:1px solid var(--hot);background:rgba(255,138,40,.06);color:var(--ink);border-radius:2px;padding:6px 14px;font-weight:600;cursor:pointer;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.btn{border:1px solid var(--hot);background:rgba(255,138,40,.06);color:var(--ink);border-radius:2px;padding:6px 14px;font-weight:400;cursor:pointer;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
 .btn.primary{background:var(--hot);color:#140800;box-shadow:0 0 16px rgba(255,138,40,.35)}
 .btn:disabled{opacity:.35;cursor:default;box-shadow:none}
 .btn:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--lean);outline-offset:2px}
-.status{font-size:13px;color:var(--sub);width:100%;line-height:1.5;height:4.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.status{font-family:var(--read);font-size:13px;color:var(--sub);width:100%;line-height:1.5;height:4.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
 
 .hero,.box,.grid{border:1px solid var(--line);border-radius:0;background:
   linear-gradient(var(--c),var(--c)) 0 0/14px 2px no-repeat,linear-gradient(var(--c),var(--c)) 0 0/2px 14px no-repeat,
@@ -51,14 +52,14 @@ button,select,input{font:inherit;color:inherit}
 .dial{position:relative;width:min(100%,310px);height:min(calc(100vw - 62px),310px);margin:4px auto 0}
 .dial svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
 .big{position:absolute;left:0;right:0;top:46%;transform:translateY(-50%);text-align:center;
-  font-family:"Rajdhani","Hiragino Sans",system-ui,sans-serif;font-weight:700;font-size:min(23vw,92px);letter-spacing:.01em;
+  font-family:var(--dot);font-weight:400;font-size:min(22vw,88px);letter-spacing:0;
   line-height:1;white-space:nowrap;color:#ffe2b0;text-shadow:0 0 18px rgba(255,138,40,.38)}
-.big small{font-size:.4em;margin-left:2px;font-weight:600}
+.big small{font-size:.4em;margin-left:2px}
 .big.off{opacity:.3;text-shadow:none}
 .big.est{font-style:italic;opacity:.75}
 .side{position:absolute;left:0;right:0;top:64%;text-align:center}
 .sub2{font-size:14px;color:var(--sub);line-height:1.45}
-.judge{font-size:19px;font-weight:700;height:38px;line-height:38px;margin-top:6px;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background-color .2s,padding .2s}
+.judge{font-size:20px;font-weight:400;height:38px;line-height:38px;margin-top:6px;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background-color .2s,padding .2s}
 .judge.hot,.judge.cold{padding:0 12px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
 .hero[data-side] .judge.hot{background:var(--rich);color:#170400;text-shadow:none;animation:flash .9s ease-out 1}
 .hero[data-side] .judge.cold{background:var(--lean);color:#02121a;text-shadow:none;animation:flash .9s ease-out 1}
@@ -71,12 +72,13 @@ button,select,input{font:inherit;color:inherit}
 .scale{position:absolute;left:4%;right:4%;bottom:3%;display:flex;justify-content:space-between;font-size:13px;color:var(--sub)}
 .scale span{white-space:nowrap}
 .scale span:nth-child(2){display:none}
-.alertslot{position:relative;margin-top:12px;height:42px;border:1px dashed var(--line);display:flex;align-items:center;padding:0 14px;font-size:13px;color:var(--sub)}
-.alert{position:absolute;inset:-1px;display:flex;align-items:center;padding:0 14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;visibility:hidden}
+.capwrap{position:relative;margin-top:6px}
+.capwrap .cap{margin:0;font-family:var(--read)}
+.alert{position:absolute;inset:0;display:flex;align-items:center;padding:0 14px;font-weight:400;font-size:16px;line-height:1.45;overflow:hidden;visibility:hidden;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
 .alert.on{visibility:visible}
 .alert.rich{background:var(--rich);color:#170400;box-shadow:0 0 22px rgba(255,77,31,.55)}
 .alert.lean{background:var(--lean);color:#02121a;box-shadow:0 0 22px rgba(111,211,255,.45)}
-.ctrl{display:flex;align-items:center;gap:8px;height:28px;margin-top:8px;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden}
+.ctrl{display:flex;align-items:center;gap:8px;height:28px;margin-top:8px;font-size:14px;font-weight:400;white-space:nowrap;overflow:hidden}
 .ctrl b{font-size:12px;font-weight:400;color:var(--sub)}
 .ctrl span{overflow:hidden;text-overflow:ellipsis}
 .ctrl i{flex:0 0 9px;height:9px;transform:rotate(45deg);background:var(--line)}
@@ -94,7 +96,7 @@ button,select,input{font:inherit;color:inherit}
 .cell.alarm .k,.cell.alarm .v{color:#1a0203;text-shadow:none}
 .cell .k{font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cell .v{font-size:20px;line-height:1.3;height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono)}
-#cLoop{font-family:inherit;font-weight:700}
+#cLoop{font-family:var(--dot);font-weight:400}
 .box{margin-top:12px;padding:12px 14px;--c:var(--sub)}
 canvas{width:100%;height:190px;display:block}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--sub);margin-top:6px}
@@ -105,15 +107,15 @@ canvas{width:100%;height:190px;display:block}
 .field{display:flex;flex-direction:column;font-size:12px;color:var(--sub);gap:2px}
 .field input,.field select{border:1px solid var(--line);background:rgba(0,0,0,.4);border-radius:0;padding:5px 8px;width:110px;color:var(--ink);font-family:var(--mono)}
 .field select{width:220px;font-family:inherit}
-summary{cursor:pointer;font-weight:600;list-style:none}
+summary{cursor:pointer;font-weight:400;list-style:none}
 summary::-webkit-details-marker{display:none}
 summary::before{content:"";display:inline-block;width:0;height:0;border-left:6px solid var(--hot);border-top:5px solid transparent;border-bottom:5px solid transparent;margin-right:10px;vertical-align:middle;transition:transform .15s}
 details[open]>summary::before{transform:rotate(90deg)}
 pre.log{font-size:11px;max-height:220px;overflow:auto;white-space:pre-wrap;color:var(--sub);margin:8px 0 0;font-family:var(--mono)}
-.note{font-size:13px;color:var(--sub);margin:8px 0 0}
-h2{font-size:15px;margin:0 0 8px;color:var(--ink);text-shadow:0 0 8px rgba(255,138,40,.35)}
-.man h3{font-size:14px;margin:16px 0 4px;color:var(--hot)}
-.man p,.man li{font-size:13px;line-height:1.7}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;font-family:var(--read)}
+h2{font-size:16px;font-weight:400;margin:0 0 8px;color:var(--ink);text-shadow:0 0 8px rgba(255,138,40,.35)}
+.man h3{font-size:15px;font-weight:400;margin:16px 0 4px;color:var(--hot)}
+.man p,.man li{font-size:13px;line-height:1.7;font-family:var(--read)}
 .man p{margin:4px 0}
 .man ol,.man ul{margin:4px 0;padding-left:1.4em}
 .tw{overflow-x:auto;margin:6px 0}
@@ -121,7 +123,7 @@ h2{font-size:15px;margin:0 0 8px;color:var(--ink);text-shadow:0 0 8px rgba(255,1
 .tbl th,.tbl td{border-bottom:1px solid var(--line);padding:4px 12px 4px 0;text-align:left}
 .tbl th{color:var(--sub);font-weight:400;font-family:inherit}
 .rec{border:1px solid var(--ok);padding:8px 12px;margin:8px 0;font-size:14px;font-family:inherit;box-shadow:inset 0 0 18px rgba(255,176,46,.08)}
-.rec b{font-size:20px;font-family:var(--mono);color:var(--ok);text-shadow:0 0 10px rgba(255,176,46,.5)}
+.rec b{font-size:22px;font-weight:400;font-family:var(--mono);color:var(--ok);text-shadow:0 0 10px rgba(255,176,46,.5)}
 .esttag{display:inline-block;font-size:12px;border:1px solid currentColor;padding:0 6px;margin-top:3px;color:var(--sub)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -148,12 +150,12 @@ h2{font-size:15px;margin:0 0 8px;color:var(--ink);text-shadow:0 0 8px rgba(255,1
       </div>
     </div>
     <div class="judge" id="judge">待機中</div>
+    <div class="capwrap">
     <p class="cap" id="cap">O2制御中は、ECUの燃料補正から濃さの傾向が分かります。マイナスはECUが燃料を減らしている（補正前は濃い）状態です。</p>
-    <div class="track"><div class="needle off" id="needle"></div></div>
-    <div class="alertslot">警告なし
       <div class="alert rich" id="alertRich">濃い警告：ECUが大きく減量し続けています</div>
       <div class="alert lean" id="alertLean">薄い警告：ECUが大きく増量し続けています</div>
     </div>
+    <div class="track"><div class="needle off" id="needle"></div></div>
     <div class="ctrl" id="ctrl" data-lv="none"><i></i><b>介入判定</b><span id="ctrlT">基準データ未記録</span></div>
   </div>
 
@@ -346,13 +348,13 @@ h2{font-size:15px;margin:0 0 8px;color:var(--ink);text-shadow:0 0 8px rgba(255,1
     <summary>通信ログ</summary>
     <pre class="log" id="log"></pre>
   </details>
-  <p class="note" style="text-align:center">版：v17（2026-11-18）</p>
+  <p class="note" style="text-align:center">版：v21（2026-11-18）</p>
 </main>
 
 <script>
 (() => {
 const $ = id => document.getElementById(id);
-const LOOP = {1:'暖機中',2:'O2制御中',4:'O2制御外',8:'異常',16:'センサー異常'};
+const LOOP = {0:'燃調信号なし',1:'暖機中',2:'O2制御中',4:'O2制御外',8:'異常',16:'センサー異常'};
 const RANGE = 25, STOICH = 14.7;
 const vafr = pct => STOICH * (1 + pct/100);
 const isAfr = () => $('sDisp').value === 'afr';
@@ -827,7 +829,7 @@ function renderOl(){
   const L = 40, R = 18, T = 6, B = 18, pw = w-L-R, ph = hh-T-B;
   const X = v => L + pw * v/100, Y = r => T + ph * (1 - Math.min(10000, r)/10000);
   x.strokeStyle = col('--line'); x.lineWidth = 1; x.strokeRect(L, T, pw, ph);
-  x.fillStyle = col('--sub'); x.font = '11px system-ui,sans-serif'; x.textAlign = 'right'; x.textBaseline = 'middle';
+  x.fillStyle = col('--sub'); x.font = '12px "DotGothic16",monospace'; x.textAlign = 'right'; x.textBaseline = 'middle';
   for (const r of [0, 5000, 10000]) x.fillText(r === 0 ? '0' : (r/1000) + '千', L-5, Y(r));
   x.textAlign = 'center'; x.textBaseline = 'alphabetic';
   for (const v of [0, 50, 100]) x.fillText(v + '%', X(v), hh-3);
@@ -894,7 +896,7 @@ function render(){
   const jt = $('judge').textContent;
   $('judge').classList.toggle('hot', jt.includes('燃料増量中'));
   $('judge').classList.toggle('cold', jt.includes('燃料減量中'));
-  $('cLoop').parentElement.classList.toggle('alarm', S.loop != null && S.loop !== 2 && S.loop !== 1);
+  $('cLoop').parentElement.classList.toggle('alarm', S.loop != null && S.loop !== 2 && S.loop !== 1 && S.loop !== 0);
   $('alertRich').classList.toggle('on', richActive);
   $('alertLean').classList.toggle('on', leanActive && !richActive);
   $('ctrl').dataset.lv = ctrlJ.lv; $('ctrlT').textContent = ctrlJ.t;
@@ -944,7 +946,7 @@ function draw(){
   }
   x.globalAlpha = 1;
 
-  x.fillStyle = col('--sub'); x.font = '11px system-ui,sans-serif'; x.textAlign = 'right'; x.textBaseline = 'middle';
+  x.fillStyle = col('--sub'); x.font = '12px "DotGothic16",monospace'; x.textAlign = 'right'; x.textBaseline = 'middle';
   for (const g of [RANGE, 0, -RANGE]) x.fillText(isAfr() ? vafr(g).toFixed(1) : (g > 0 ? '+' : g < 0 ? '−' : '') + Math.abs(g), L-5, Y(g));
   x.strokeStyle = col('--line'); x.setLineDash([4,4]); x.beginPath(); x.moveTo(L, Y(0)); x.lineTo(w-R, Y(0)); x.stroke(); x.setLineDash([]);
   x.textBaseline = 'alphabetic'; x.textAlign = 'left'; x.fillText('30秒前', L, h-3); x.textAlign = 'right'; x.fillText('今', w-R, h-3);
