@@ -188,7 +188,8 @@ h2{font-size:15px;margin:0 0 8px}
 <script>
 (() => {
 const $ = id => document.getElementById(id);
-const SERVICES = [0xfff0, 0xffe0, 0x18f0, 'e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
+const full = x => typeof x === 'number' ? '0000' + x.toString(16).padStart(4,'0') + '-0000-1000-8000-00805f9b34fb' : x;
+const SERVICES = [0xfff0, 0xffe0, 0x18f0, 'e7810a71-73ae-499d-8c15-faa9aef0c3f2'].map(full);
 const LOOP = {1:'暖機中',2:'O2制御中',4:'高負荷・減速',8:'異常',16:'センサー異常'};
 // ナローバンド電圧 → λ の目安（センサー活性時）
 // 0.12〜0.85V（約14.3〜15.0）は一般的なジルコニア特性、その外側はMini3同様の表示域に合わせた目安
@@ -282,8 +283,8 @@ const KNOWN = [
   {s:0xffe0, n:0xffe1, w:0xffe1},
   {s:0x18f0, n:0x2af0, w:0x2af1},
   {s:'e7810a71-73ae-499d-8c15-faa9aef0c3f2', n:'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f', w:'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f'}
-];
-const uu = x => typeof x === 'number' ? '0x' + x.toString(16).toUpperCase() : x;
+].map(k => ({s:full(k.s), n:full(k.n), w:full(k.w)}));
+const uu = x => /^0000[0-9a-f]{4}-0000-1000-8000-00805f9b34fb$/.test(x) ? x.slice(4,8).toUpperCase() : x;
 function propStr(c){ const p = c.properties; return ['read','write','writeWithoutResponse','notify','indicate'].filter(k => p[k]).join(','); }
 
 async function findChannel(srv){
@@ -314,6 +315,12 @@ async function findChannel(srv){
   return null;
 }
 
+let reqMode = 0;
+const REQ_OPTS = [
+  () => ({acceptAllDevices:true, optionalServices:SERVICES}),
+  () => ({filters: SERVICES.map(u => ({services:[u]})), optionalServices:SERVICES}),
+  () => ({acceptAllDevices:true})
+];
 async function connect(){
   if (!navigator.bluetooth){
     status('このブラウザはBluetooth接続に対応していません。AndroidはChrome、iPhoneはBluefyで開いてください（デモは動きます）。');
@@ -322,7 +329,18 @@ async function connect(){
   let step = 'アダプター選択';
   try{
     status('アダプターを選んでください…');
-    dev = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:SERVICES});
+    const opts = REQ_OPTS[reqMode % REQ_OPTS.length];
+    log('選択画面の呼び出し（方式' + (reqMode % REQ_OPTS.length + 1) + '/' + REQ_OPTS.length + '）');
+    try{
+      dev = await navigator.bluetooth.requestDevice(opts());
+    }catch(e){
+      if (e && e.name === 'NotFoundError') throw e;
+      reqMode++;
+      throw new Error(errStr(e) + '（方式' + (reqMode % REQ_OPTS.length || REQ_OPTS.length) + 'で失敗。もう一度「接続」を押すと別の方式で試します）');
+    }
+    try{
+      if (navigator.bluetooth.getAvailability) log('Bluetooth利用可否: ' + await navigator.bluetooth.getAvailability());
+    }catch(e){}
     log('選択: ' + (dev.name || '(名前なし)'));
     dev.addEventListener('gattserverdisconnected', () => { if (mode === 'ble'){ stop(); status('アダプターとの接続が切れました。'); } });
     step = 'Bluetooth接続'; status('接続中…');
