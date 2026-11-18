@@ -374,7 +374,7 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <summary><span style="font-family:var(--min);font-weight:400;font-size:17px;color:#ff8a1c">通信ログ</span><span class="en">COMM LOG</span></summary>
     <pre class="log" id="log"></pre>
   </details>
-  <p class="note" style="text-align:center">版：v34（2026-11-19）</p>
+  <p class="note" style="text-align:center">版：v35（2026-11-19）</p>
 </main>
 
 <script>
@@ -678,10 +678,9 @@ function buildRing(){
   g.appendChild(defs);
   // 文字盤（外周は一部だけ太い弧で囲む非対称デザイン）
   g.appendChild(mk('circle', {cx:CX, cy:CY, r:98, fill:'url(#face)', stroke:'rgba(255,106,0,.25)', 'stroke-width':1}));
-  g.appendChild(mk('path', {d:arcD(1.5, 25, 98), fill:'none', stroke:'#ff6a00', 'stroke-width':1.2, opacity:.7}));
-  g.appendChild(mk('path', {d:arcD(-25, 1.5, 98), fill:'none', stroke:'#ff6a00', 'stroke-width':3.5, opacity:.9}));
-  { const a = ang(1.5), p1 = PT(94.5, a), p2 = PT(100.5, a);
-    g.appendChild(mk('line', {x1:p1[0], y1:p1[1], x2:p2[0], y2:p2[1], stroke:'#ff6a00', 'stroke-width':1.6})); }
+  g.appendChild(mk('path', {d:arcD(-25, 25, 98), fill:'none', stroke:'#ff6a00', 'stroke-width':1.2, opacity:.6}));
+  g.appendChild(mk('path', {id:'outerThick', d:arcD(-25, 0, 98), fill:'none', stroke:'#ff6a00', 'stroke-width':3.5, opacity:.9}));
+  g.appendChild(mk('line', {id:'outerCap', stroke:'#ff6a00', 'stroke-width':1.6}));
   // 区間の帯（薄い色）
   const zones = [[-25,-3,'RICH','rgba(255,77,31,.22)'],[-3,3,'OPTIMAL','rgba(255,176,46,.38)'],[3,25,'LEAN','rgba(111,211,255,.18)']];
   for (const [v0, v1, , fill] of zones) g.appendChild(mk('path', {d:sector(v0, v1, 50, 60), fill, stroke:'rgba(255,140,40,.55)', 'stroke-width':.8}));
@@ -718,8 +717,28 @@ function buildRing(){
   g.appendChild(mk('circle', {cx:CX, cy:CY, r:5, fill:'#140a04', stroke:'rgba(255,179,71,.6)', 'stroke-width':1.2}));
   setScale();
 }
+let outerCur = 0, outerTo = 0, outerAnim = null;
+function drawOuter(v){
+  const t = document.getElementById('outerThick'), c = document.getElementById('outerCap'); if (!t) return;
+  const vv = Math.max(-24.9, Math.min(RANGE, v));
+  t.setAttribute('d', arcD(-25, vv, 98));
+  const a = ang(vv), p1 = PT(94.5, a), p2 = PT(100.5, a);
+  c.setAttribute('x1', p1[0]); c.setAttribute('y1', p1[1]); c.setAttribute('x2', p2[0]); c.setAttribute('y2', p2[1]);
+}
+function moveOuter(v){
+  outerTo = v;
+  if (outerAnim) return;
+  const step = () => {
+    const d = outerTo - outerCur;
+    if (Math.abs(d) < .05){ outerCur = outerTo; drawOuter(outerCur); outerAnim = null; return; }
+    outerCur += d * .25; drawOuter(outerCur); outerAnim = requestAnimationFrame(step);
+  };
+  outerAnim = requestAnimationFrame(step);
+}
 function setRing(v){
   const p = document.getElementById('ptr'), fa = document.getElementById('fillArc'); if (!p) return;
+  moveOuter(v == null ? 0 : Math.max(-RANGE, Math.min(RANGE, v)));
+  document.getElementById('outerThick').setAttribute('opacity', v == null ? .35 : .9);
   const vv = v == null ? 0 : Math.max(-RANGE, Math.min(RANGE, v));
   p.style.transform = 'rotate(' + angDeg(vv) + 'deg)'; p.setAttribute('opacity', v == null ? .25 : 1);
   if (fa) fa.setAttribute('d', v == null || Math.abs(vv) < .3 ? '' : (vv > 0 ? arcD(0, vv, 75) : arcD(vv, 0, 75)));
