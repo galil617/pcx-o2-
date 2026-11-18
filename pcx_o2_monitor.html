@@ -230,13 +230,26 @@ function estimate(v){
 }
 
 /* ---------- BLE / ELM327 ---------- */
+function errStr(e){
+  if (e == null) return '不明なエラー';
+  const parts = [e.name, e.message, e.code].filter(x => x !== undefined && x !== null && x !== '');
+  return parts.length ? parts.join(' / ') : String(e);
+}
+async function writeChunk(c){
+  const p = chW.properties;
+  const order = p.writeWithoutResponse
+    ? ['writeValueWithoutResponse','writeValue','writeValueWithResponse']
+    : ['writeValueWithResponse','writeValue','writeValueWithoutResponse'];
+  let last = null;
+  for (const m of order){
+    if (typeof chW[m] !== 'function') continue;
+    try{ await chW[m](c); return; }catch(e){ last = e; }
+  }
+  throw last || new Error('書き込みできません');
+}
 async function writeRaw(str){
   const d = new TextEncoder().encode(str);
-  for (let i = 0; i < d.length; i += 20){
-    const c = d.slice(i, i+20);
-    if (chW.properties.writeWithoutResponse) await chW.writeValueWithoutResponse(c);
-    else await chW.writeValue(c);
-  }
+  for (let i = 0; i < d.length; i += 20) await writeChunk(d.slice(i, i+20));
 }
 function onRx(e){
   rxBuf += new TextDecoder().decode(e.target.value);
@@ -264,38 +277,76 @@ function parse(raw, pid){
   return out.length ? out : null;
 }
 
+const KNOWN = [
+  {s:0xfff0, n:0xfff1, w:0xfff2},
+  {s:0xffe0, n:0xffe1, w:0xffe1},
+  {s:0x18f0, n:0x2af0, w:0x2af1},
+  {s:'e7810a71-73ae-499d-8c15-faa9aef0c3f2', n:'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f', w:'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f'}
+];
+const uu = x => typeof x === 'number' ? '0x' + x.toString(16).toUpperCase() : x;
+function propStr(c){ const p = c.properties; return ['read','write','writeWithoutResponse','notify','indicate'].filter(k => p[k]).join(','); }
+
+async function findChannel(srv){
+  for (const k of KNOWN){
+    let svc;
+    try{ svc = await srv.getPrimaryService(k.s); }catch(e){ continue; }
+    log('サービス発見: ' + uu(k.s));
+    try{
+      const n = await svc.getCharacteristic(k.n);
+      const w = k.w === k.n ? n : await svc.getCharacteristic(k.w);
+      log('特性: 受信 ' + uu(k.n) + ' [' + propStr(n) + '] / 送信 ' + uu(k.w) + ' [' + propStr(w) + ']');
+      return {n, w};
+    }catch(e){ log('既定の特性が取れません: ' + errStr(e)); }
+    try{
+      let n = null, w = null;
+      for (const c of await svc.getCharacteristics()){
+        log('  特性 ' + c.uuid + ' [' + propStr(c) + ']');
+        if (!n && (c.properties.notify || c.properties.indicate)) n = c;
+        if (!w && (c.properties.write || c.properties.writeWithoutResponse)) w = c;
+      }
+      if (n && w) return {n, w};
+    }catch(e){ log('特性一覧が取れません: ' + errStr(e)); }
+  }
+  try{
+    const all = await srv.getPrimaryServices();
+    log('見つかったサービス: ' + (all.map(x => x.uuid).join(', ') || 'なし'));
+  }catch(e){ log('サービス一覧が取れません: ' + errStr(e)); }
+  return null;
+}
+
 async function connect(){
   if (!navigator.bluetooth){
     status('このブラウザはBluetooth接続に対応していません。AndroidはChrome、iPhoneはBluefyで開いてください（デモは動きます）。');
     return;
   }
+  let step = 'アダプター選択';
   try{
     status('アダプターを選んでください…');
     dev = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:SERVICES});
+    log('選択: ' + (dev.name || '(名前なし)'));
     dev.addEventListener('gattserverdisconnected', () => { if (mode === 'ble'){ stop(); status('アダプターとの接続が切れました。'); } });
-    status('接続中…');
-    const srv = await dev.gatt.connect();
-    let found = null;
-    for (const s of await srv.getPrimaryServices()){
-      let n = null, w = null;
-      for (const c of await s.getCharacteristics()){
-        if (!n && (c.properties.notify || c.properties.indicate)) n = c;
-        if (!w && (c.properties.write || c.properties.writeWithoutResponse)) w = c;
-      }
-      if (n && w){ found = {n, w}; break; }
-    }
-    if (!found) throw new Error('ELM327の通信チャンネルが見つかりません。BLE対応のアダプターか確認してください。');
+    step = 'Bluetooth接続'; status('接続中…');
+    let srv;
+    try{ srv = await dev.gatt.connect(); }
+    catch(e){ log('接続1回目失敗: ' + errStr(e) + '　再試行します'); await new Promise(r => setTimeout(r, 800)); srv = await dev.gatt.connect(); }
+    log('Bluetooth接続OK');
+    step = '通信チャンネル探索';
+    const found = await findChannel(srv);
+    if (!found) throw new Error('ELM327の通信チャンネルが見つかりません。');
     chN = found.n; chW = found.w;
+    step = '受信開始';
     await chN.startNotifications();
     chN.addEventListener('characteristicvaluechanged', onRx);
+    log('受信開始OK');
     mode = 'ble'; setButtons();
+    step = 'ELM327初期化';
     await initElm();
     keepAwake();
     poll();
   }catch(err){
-    if (err && err.name === 'NotFoundError'){ status('接続をキャンセルしました。'); return; }
-    status('接続できませんでした：' + (err.message || err));
-    log('ERR ' + (err.message || err));
+    if (err && err.name === 'NotFoundError' && step === 'アダプター選択'){ status('接続をキャンセルしました。'); return; }
+    status('接続できませんでした（' + step + '）：' + errStr(err) + '　詳細は通信ログへ');
+    log('ERR [' + step + '] ' + errStr(err));
     stop();
   }
 }
