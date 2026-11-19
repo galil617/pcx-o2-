@@ -251,6 +251,10 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <canvas id="olCv" style="height:170px"></canvas>
     <div class="legend"><span>横：開度（%）</span><span>縦：回転数</span><span>点線：70%</span></div>
     <div class="tw"><table class="tbl num" id="olTbl"></table></div>
+    <h3 style="font-size:15px;font-weight:400;color:var(--hot);margin:14px 0 4px">開ける速さと外れやすさ</h3>
+    <div class="tw"><table class="tbl num" id="rateTbl"></table></div>
+    <p class="note num" id="durInfo" style="margin-top:4px">オープンループが続いた時間：まだ記録がありません</p>
+    <p class="note">「開ける動作」は、O2制御中に1秒あたり5%以上開けた区間です。その間にO2制御が外れたかを数えて、開ける速さごとの外れた割合を出します。</p>
     <div class="row" style="margin-top:8px">
       <button class="btn" id="bOlClr">記録を消去</button>
     </div>
@@ -391,7 +395,7 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <summary><span style="font-family:var(--min);font-weight:400;font-size:17px;color:#ff8a1c">通信ログ</span><span class="en">COMM LOG</span></summary>
     <pre class="log" id="log"></pre>
   </details>
-  <p class="note" style="text-align:center">版：v36（2026-11-19）</p>
+  <p class="note" style="text-align:center">版：v37（2026-11-19）</p>
 </main>
 
 <script>
@@ -696,7 +700,7 @@ function stop(){
   if (demoTimer){ clearInterval(demoTimer); demoTimer = null; }
   if (dev && dev.gatt && dev.gatt.connected){ try{ dev.gatt.disconnect(); }catch(e){} }
   if (wakeLock){ wakeLock.release().catch(()=>{}); wakeLock = null; }
-  pending = null; mode = null; setButtons(); olDemo = []; olDirty = true; setTimeout(renderOl, 0);
+  pending = null; mode = null; setButtons(); olDemo = []; opDemo = []; opening = null; curOl = null; olDirty = true; setTimeout(renderOl, 0);
 }
 async function keepAwake(){ try{ if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){} }
 function setButtons(){
@@ -806,14 +810,39 @@ function avgStft(now){
 
 function ingest(){
   const now = performance.now();
+  const rate = tpsRate(now);
+  const isDemo = mode === 'demo';
   if (prevLoop === 2 && S.loop === 4 && S.tps != null && S.tps >= 15 && prevTps != null){
     const lo = Math.min(prevTps, S.tps), hi = Math.max(prevTps, S.tps);
-    const arr = mode === 'demo' ? olDemo : olEv;
-    arr.push({t:Date.now(), lo, hi, mid:(lo+hi)/2, rpm:S.rpm, map:S.map});
+    const arr = isDemo ? olDemo : olEv;
+    const ev = {t:Date.now(), lo, hi, mid:(lo+hi)/2, rpm:S.rpm, map:S.map, rate};
+    arr.push(ev);
     if (arr.length > 300) arr.shift();
     if (arr === olEv) saveOl();
+    curOl = ev; olStartT = now;
+    if (opening) opening.exited = true;
     olDirty = true;
-    log('O2制御が外れた：開度' + lo.toFixed(0) + '〜' + hi.toFixed(0) + '%、' + Math.round(S.rpm || 0) + 'rpm');
+    log('O2制御が外れた：開度' + lo.toFixed(0) + '〜' + hi.toFixed(0) + '%、' + Math.round(S.rpm || 0) + 'rpm、開け速さ' + (rate != null ? rate.toFixed(0) + '%/秒' : '--'));
+  }
+  if (curOl && S.loop === 2){
+    curOl.dur = (now - olStartT) / 1000; curOl = null;
+    if (!isDemo) saveOl(); olDirty = true;
+  } else if (curOl && S.loop != null && S.loop !== 4){ curOl = null; }
+  // 開ける動作（1秒あたり5%以上開けた区間）の記録
+  if (rate != null){
+    if (!opening){
+      if (rate >= 5 && S.loop === 2) opening = {t0:now, max:rate, exited:false, rpm:S.rpm, low:0};
+    } else {
+      opening.max = Math.max(opening.max, rate);
+      if (rate < 2){ if (!opening.low) opening.low = now; } else opening.low = 0;
+      if ((opening.low && now - opening.low > 800) || now - opening.t0 > 6000){
+        const arr = isDemo ? opDemo : opEv;
+        arr.push({max:opening.max, exited:opening.exited, rpm:opening.rpm});
+        if (arr.length > 600) arr.shift();
+        if (arr === opEv) saveOp();
+        opening = null; olDirty = true;
+      }
+    }
   }
   if (S.loop != null) prevLoop = S.loop;
   if (S.loop === 2 || S.loop == null) prevTps = S.tps; else prevTps = null;
@@ -953,6 +982,17 @@ function baseInfo(){
 
 let prevLoop = null, prevTps = null, olDirty = true;
 let olDemo = [], olEv = []; try{ olEv = JSON.parse(localStorage.getItem('pcxOlEv') || '[]') || []; }catch(e){ olEv = []; }
+let opDemo = [], opEv = []; try{ opEv = JSON.parse(localStorage.getItem('pcxOpEv') || '[]') || []; }catch(e){ opEv = []; }
+function saveOp(){ try{ localStorage.setItem('pcxOpEv', JSON.stringify(opEv)); }catch(e){} }
+let opening = null, curOl = null, olStartT = 0;
+function tpsRate(now){
+  if (S.tps == null) return null;
+  for (let i = hist.length - 1; i >= 0; i--){
+    const h = hist[i];
+    if (now - h.t >= 900){ if (h.tps == null || now - h.t > 2500) return null; return (S.tps - h.tps) / ((now - h.t) / 1000); }
+  }
+  return null;
+}
 function saveOl(){ try{ localStorage.setItem('pcxOlEv', JSON.stringify(olEv)); }catch(e){} }
 const med = arr => { if (!arr.length) return null; const a = [...arr].sort((x,y) => x-y), m = a.length >> 1; return a.length % 2 ? a[m] : (a[m-1]+a[m])/2; };
 function renderOl(){
@@ -970,6 +1010,18 @@ function renderOl(){
     }
     $('olTbl').innerHTML = h;
   }
+  const ops = mode === 'demo' ? opDemo : opEv;
+  const bins = [[5,20,'ゆっくり（5〜20%/秒）'],[20,50,'ふつう（20〜50%/秒）'],[50,100,'速い（50〜100%/秒）'],[100,1e9,'一気に（100%/秒〜）']];
+  let rh = '<tr><th>開ける速さ</th><th>回数</th><th>外れた</th><th>割合</th></tr>';
+  for (const [lo,hi,lab] of bins){
+    const g = ops.filter(o => o.max >= lo && o.max < hi), k = g.filter(o => o.exited).length;
+    rh += '<tr><td>' + lab + '</td><td>' + g.length + '</td><td>' + k + '</td><td>' + (g.length ? Math.round(k / g.length * 100) + '%' : '--') + '</td></tr>';
+  }
+  $('rateTbl').innerHTML = rh;
+  const durs = ev.filter(e => e.dur != null).map(e => e.dur);
+  $('durInfo').textContent = durs.length
+    ? 'オープンループが続いた時間：中央値 ' + med(durs).toFixed(1) + '秒（' + Math.min(...durs).toFixed(1) + '〜' + Math.max(...durs).toFixed(1) + '秒、' + durs.length + '回）'
+    : 'オープンループが続いた時間：まだ記録がありません';
   const c = $('olCv'), dpr = window.devicePixelRatio || 1, w = c.clientWidth, hh = c.clientHeight;
   if (c.width !== Math.round(w*dpr) || c.height !== Math.round(hh*dpr)){ c.width = Math.round(w*dpr); c.height = Math.round(hh*dpr); }
   const x = c.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,w,hh);
@@ -1199,9 +1251,9 @@ $('bBaseClr').onclick = () => {
 baseInfo();
 buildRing(); setRing(null); setButtons();
 $('bOlClr').onclick = () => {
-  if (!olEv.length) return;
+  if (!olEv.length && !opEv.length) return;
   if (!confirm('O2制御が外れた開度の記録（' + olEv.length + '回分）を消去します。元に戻せません。よろしいですか？')) return;
-  olEv = []; saveOl(); renderOl();
+  olEv = []; saveOl(); opEv = []; saveOp(); renderOl();
 };
 setTimeout(renderOl, 0);
 try{ const d = localStorage.getItem('pcxDisp'); if (d) $('sDisp').value = d; }catch(e){}
