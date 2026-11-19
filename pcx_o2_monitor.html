@@ -146,10 +146,23 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
 .rec{border:1px solid var(--ok);padding:8px 12px;margin:8px 0;font-size:14px;font-family:inherit;box-shadow:inset 0 0 18px rgba(255,176,46,.08)}
 .rec b{font-size:22px;font-weight:400;font-family:var(--mono);color:var(--ok);text-shadow:0 0 10px rgba(255,176,46,.5)}
 .esttag{display:inline-block;font-size:12px;border:1px solid currentColor;padding:0 6px;margin-top:3px;color:var(--sub)}
+#pocket{position:fixed;inset:0;z-index:50;background:#000;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  color:#5a3410;font-family:var(--dot);touch-action:none;-webkit-user-select:none;user-select:none;padding:env(safe-area-inset-top,0px) 20px env(safe-area-inset-bottom,0px)}
+#pocket.on{display:flex}
+#pocket .pk1{font-size:20px;color:#7a4614}
+#pocket .pk2{font-size:14px;text-align:center;line-height:1.7}
+#pocket .pkbar{width:160px;height:4px;background:#1a0d03;margin-top:18px}
+#pocket .pkbar i{display:block;height:100%;width:0;background:#ff8a1c}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
+<div id="pocket" aria-live="polite">
+  <div class="pk1">記録中</div>
+  <div class="pk2 num" id="pkInfo">--</div>
+  <div class="pk2">画面を長押しで解除</div>
+  <div class="pkbar"><i id="pkProg"></i></div>
+</div>
 <main>
   <header>
     <h1>PCX 燃調監視<span class="link" id="link" data-st=""><i></i><span id="linkT">未接続</span></span></h1>
@@ -214,6 +227,10 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
       <button class="btn" id="bCsv" disabled>CSVを保存</button>
       <span class="note num" id="recInfo" style="margin:0">0件</span>
     </div>
+    <div class="row">
+      <button class="btn" id="bPocket">ポケットモード</button>
+    </div>
+    <p class="note">ポケットに入れて走るときは、画面を消さずにポケットモードにしてください。画面が真っ黒になり、誤タッチを受け付けません（長押しで解除）。iPhoneの画面を消す（ロックする）とアプリが止まり、記録も止まります。</p>
     <p class="note num" id="warnInfo">警告回数　濃い 0／薄い 0</p>
     <p class="note">走行中は画面を見ずに記録だけ回し、停車してから確認してください。</p>
   </div>
@@ -374,7 +391,7 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <summary><span style="font-family:var(--min);font-weight:400;font-size:17px;color:#ff8a1c">通信ログ</span><span class="en">COMM LOG</span></summary>
     <pre class="log" id="log"></pre>
   </details>
-  <p class="note" style="text-align:center">版：v35（2026-11-19）</p>
+  <p class="note" style="text-align:center">版：v36（2026-11-19）</p>
 </main>
 
 <script>
@@ -395,6 +412,7 @@ function setScale(){
 
 const S = {stft:null,rpm:null,tps:null,ect:null,loop:null,map:null,load:null,iat:null,adv:null};
 let hist = [], rec = false, recData = [], running = false, mode = null, demoTimer = null, wakeLock = null;
+let userStop = false, reconnecting = false, pocket = false;
 let richStart = null, richActive = false, richN = 0, leanStart = null, leanActive = false, leanN = 0;
 let dev = null, chW = null, chN = null, rxBuf = '', pending = null, lock = Promise.resolve();
 let supSet = new Set(), drawQueued = false, stftMiss = 0;
@@ -509,6 +527,7 @@ const REQ_OPTS = [
   () => ({acceptAllDevices:true})
 ];
 async function connect(){
+  userStop = false;
   if (!navigator.bluetooth){
     status('このブラウザはBluetooth接続に対応していません。AndroidはChrome、iPhoneはBluefyで開いてください（デモは動きます）。');
     return;
@@ -526,7 +545,7 @@ async function connect(){
       throw new Error(errStr(e) + '（方式' + (reqMode % REQ_OPTS.length || REQ_OPTS.length) + 'で失敗。もう一度「接続」を押すと別の方式で試します）');
     }
     log('選択: ' + (dev.name || '(名前なし)'));
-    dev.addEventListener('gattserverdisconnected', () => { if (mode === 'ble'){ stop(); status('アダプターとの接続が切れました。'); } });
+    dev.addEventListener('gattserverdisconnected', onDisconnect);
     step = 'Bluetooth接続'; status('接続中…');
     let srv;
     try{ srv = await dev.gatt.connect(); }
@@ -551,6 +570,41 @@ async function connect(){
     log('ERR [' + step + '] ' + errStr(err));
     stop();
   }
+}
+
+function onDisconnect(){
+  if (mode !== 'ble') return;
+  running = false; pending = null;
+  if (userStop){ stop(); status('アダプターとの接続が切れました。'); return; }
+  log('接続が切れました。自動で再接続します');
+  reconnect();
+}
+async function reconnect(){
+  if (reconnecting || !dev) return;
+  reconnecting = true; mode = 'ble'; setButtons();
+  for (let i = 1; i <= 40 && !userStop; i++){
+    status('接続が切れました。再接続中…（' + i + '回目）' + (rec ? '　記録は続きから再開します' : ''));
+    try{
+      const srv = await dev.gatt.connect();
+      const found = await findChannel(srv);
+      if (!found) throw new Error('通信チャンネルなし');
+      chN = found.n; chW = found.w;
+      await chN.startNotifications();
+      chN.addEventListener('characteristicvaluechanged', onRx);
+      lock = Promise.resolve(); rxBuf = '';
+      await cmd('ATE0', 2000, true);
+      const b = parse(await cmd('0100', 15000, true), '00');
+      if (!b) throw new Error('車両から応答なし');
+      log('再接続しました（' + i + '回目）');
+      status('再接続しました。' + (rec ? '記録を再開しています。' : ''));
+      reconnecting = false; keepAwake(); poll(); return;
+    }catch(e){
+      log('再接続失敗: ' + errStr(e));
+      await new Promise(r => setTimeout(r, 3000));
+    }
+  }
+  reconnecting = false;
+  if (!userStop){ stop(); status('再接続できませんでした。もう一度「ELM327に接続」を押してください。'); }
 }
 
 async function initElm(){
@@ -795,6 +849,7 @@ function ingest(){
       f(S.rpm,0), f(S.tps,1), f(S.map,0), f(S.load,1), f(S.ect,0), f(S.iat,0), f(S.adv,1), amR ? amR.t.toFixed(1) : '', eaR ? eaR.pct.toFixed(1) : '',
       richActive ? 1 : 0, leanActive ? 1 : 0, ctrlJ.lv]);
     $('recInfo').textContent = recData.length + '件';
+    if (recData.length % 100 === 0) persistRec();
   }
   if (!drawQueued){ drawQueued = true; requestAnimationFrame(() => { drawQueued = false; render(); }); }
 }
@@ -936,6 +991,7 @@ function renderOl(){
 }
 
 function render(){
+  if (pocket){ updPocket(); return; }
   if (olDirty) renderOl();
   const now = performance.now(), cl = S.loop === 2, a = cl ? avgStft(now) : null;
   const hero = $('hero'), big = $('big');
@@ -1064,6 +1120,48 @@ function draw(){
   x.strokeStyle = col('--ink'); x.lineWidth = 2; x.lineJoin = 'round'; x.stroke(); x.lineWidth = 1;
 }
 
+function persistRec(){
+  if (recData.length > 20000) return;
+  try{ localStorage.setItem('pcxRec', JSON.stringify(recData)); }catch(e){}
+}
+function restoreRec(){
+  try{
+    const r = JSON.parse(localStorage.getItem('pcxRec') || 'null');
+    if (Array.isArray(r) && r.length){
+      recData = r; $('recInfo').textContent = '前回の記録 ' + r.length + '件'; $('bCsv').disabled = false;
+    }
+  }catch(e){}
+}
+/* ---------- ポケットモード ---------- */
+function setPocket(on){
+  pocket = on; $('pocket').classList.toggle('on', on);
+  if (on){ keepAwake(); updPocket(); }
+  else render();
+}
+function updPocket(){
+  if (!pocket) return;
+  const st = reconnecting ? '再接続中' : mode === 'ble' ? '接続中' : mode === 'demo' ? 'デモ' : '未接続';
+  $('pkInfo').innerHTML = st + '　' + (rec ? '記録 ' + recData.length + '件' : '記録していません') +
+    '<br>' + (S.loop != null ? (LOOP[S.loop] || '') : '') ;
+}
+(() => {
+  let t0 = 0, raf = null;
+  const el = () => $('pocket');
+  const tick = () => {
+    const k = Math.min(1, (performance.now() - t0) / 1200);
+    $('pkProg').style.width = (k * 100) + '%';
+    if (k >= 1){ cancel(); setPocket(false); return; }
+    raf = requestAnimationFrame(tick);
+  };
+  const start = e => { e.preventDefault(); t0 = performance.now(); cancelAnimationFrame(raf); raf = requestAnimationFrame(tick); };
+  const cancel = () => { cancelAnimationFrame(raf); raf = null; $('pkProg').style.width = '0'; };
+  setTimeout(() => {
+    el().addEventListener('pointerdown', start);
+    el().addEventListener('pointerup', cancel); el().addEventListener('pointercancel', cancel); el().addEventListener('pointerleave', cancel);
+    el().addEventListener('touchstart', e => e.preventDefault(), {passive:false});
+  }, 0);
+})();
+
 function saveCsv(){
   const head = 'time,stft_pct,stft_avg2s_pct,virtual_afr,open_est_afr,fuel_mode,rpm,tps_pct,map_kpa,load_pct,ect_c,iat_c,advance_deg,ambient_c,est_add_pct,rich_warn,lean_warn,ctrl';
   const body = recData.map(r => r.map(c => /[",]/.test(String(c)) ? '"' + String(c).replace(/"/g,'""') + '"' : c).join(',')).join('\n');
@@ -1078,10 +1176,11 @@ function saveCsv(){
 
 $('bConnect').onclick = connect;
 $('bDemo').onclick = startDemo;
-$('bStop').onclick = () => { stop(); status('停止しました。'); };
+$('bStop').onclick = () => { userStop = true; stop(); status('停止しました。'); };
 $('bRec').onclick = () => {
   rec = !rec;
-  if (rec){ recData = []; $('recInfo').textContent = '0件'; }
+  if (rec){ recData = []; $('recInfo').textContent = '0件'; try{ localStorage.removeItem('pcxRec'); }catch(e){} }
+  else persistRec();
   $('bRec').textContent = rec ? '記録停止' : '記録開始';
   $('bCsv').disabled = rec || !recData.length;
 };
@@ -1131,7 +1230,14 @@ if (!amb || Date.now() - new Date(amb.at + ':00+09:00').getTime() > 3600e3) fetc
 setInterval(() => { if (!document.hidden) fetchWx(); }, 30*60e3);
 $('iAuto').onchange = () => { try{ localStorage.setItem('pcx_iAuto', $('iAuto').checked ? '1' : '0'); }catch(e){} render(); };
 $('sDisp').onchange = () => { try{ localStorage.setItem('pcxDisp', $('sDisp').value); }catch(e){} setScale(); render(); };
-document.addEventListener('visibilitychange', () => { if (!document.hidden && mode) keepAwake(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { if (rec) persistRec(); return; }
+  if (mode) keepAwake();
+  if (dev && !userStop && mode === 'ble' && !running && !reconnecting) reconnect();
+});
+window.addEventListener('pagehide', () => { if (rec) persistRec(); });
+$('bPocket').onclick = () => setPocket(true);
+restoreRec();
 window.addEventListener('resize', () => { draw(); renderOl(); });
 if (!navigator.bluetooth) status('このブラウザはBluetooth接続に対応していません。AndroidはChrome、iPhoneはBluefyで開いてください（デモは動きます）。');
 draw();
