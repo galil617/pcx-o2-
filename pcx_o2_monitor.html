@@ -247,6 +247,11 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
 
   <div class="box">
     <h2>O2制御が外れる開度<span class="en">OPEN LOOP ENTRY</span></h2>
+    <h3 style="font-size:15px;font-weight:400;color:var(--hot);margin:0 0 4px">O2制御外の地図</h3>
+    <canvas id="hmCv" style="height:230px"></canvas>
+    <div class="legend"><span>横：開度（%）</span><span>縦：回転数</span><span><i class="blk" style="background:var(--rich);opacity:.15"></i>ほぼ制御中</span><span><i class="blk" style="background:var(--rich)"></i>ほぼ制御外</span></div>
+    <p class="note num" id="hmInfo">走行データから自動で作ります。マスの数字はO2制御外だった割合（%）、空白はデータ不足（20件未満）です。開度5%未満（減速）は除外しています。</p>
+    <h3 style="font-size:15px;font-weight:400;color:var(--hot);margin:14px 0 4px">切り替わった瞬間</h3>
     <p class="note num" id="olSum" style="margin-top:0">まだ記録がありません。O2制御中から加速して「高負荷」に切り替わると自動で記録します。</p>
     <canvas id="olCv" style="height:170px"></canvas>
     <div class="legend"><span>横：開度（%）</span><span>縦：回転数</span><span>点線：70%</span></div>
@@ -395,7 +400,7 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <summary><span style="font-family:var(--min);font-weight:400;font-size:17px;color:#ff8a1c">通信ログ</span><span class="en">COMM LOG</span></summary>
     <pre class="log" id="log"></pre>
   </details>
-  <p class="note" style="text-align:center">版：v37（2026-11-19）</p>
+  <p class="note" style="text-align:center">版：v39（2026-11-20）</p>
 </main>
 
 <script>
@@ -700,7 +705,7 @@ function stop(){
   if (demoTimer){ clearInterval(demoTimer); demoTimer = null; }
   if (dev && dev.gatt && dev.gatt.connected){ try{ dev.gatt.disconnect(); }catch(e){} }
   if (wakeLock){ wakeLock.release().catch(()=>{}); wakeLock = null; }
-  pending = null; mode = null; setButtons(); olDemo = []; opDemo = []; opening = null; curOl = null; olDirty = true; setTimeout(renderOl, 0);
+  pending = null; mode = null; setButtons(); olDemo = []; opDemo = []; heatDemo = {}; opening = null; curOl = null; olDirty = true; setTimeout(renderOl, 0);
 }
 async function keepAwake(){ try{ if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){} }
 function setButtons(){
@@ -824,10 +829,18 @@ function ingest(){
     olDirty = true;
     log('O2制御が外れた：開度' + lo.toFixed(0) + '〜' + hi.toFixed(0) + '%、' + Math.round(S.rpm || 0) + 'rpm、開け速さ' + (rate != null ? rate.toFixed(0) + '%/秒' : '--'));
   }
-  if (curOl && S.loop === 2){
-    curOl.dur = (now - olStartT) / 1000; curOl = null;
+  // 継続時間：O2制御に戻るか、スロットルを閉じた（開度10%未満＝減速・停車）時点で区切る
+  if (curOl && (S.loop === 2 || (S.tps != null && S.tps < 10))){
+    curOl.dur2 = (now - olStartT) / 1000; curOl.end = S.loop === 2 ? 'cl' : 'close'; curOl = null;
     if (!isDemo) saveOl(); olDirty = true;
   } else if (curOl && S.loop != null && S.loop !== 4){ curOl = null; }
+  // 地図用の集計（O2制御中か制御外かを開度×回転数のマスごとに数える）
+  if ((S.loop === 2 || S.loop === 4) && S.tps != null && S.tps >= 5 && S.rpm != null){
+    const k = hmKey(S.tps, S.rpm), hm = isDemo ? heatDemo : heat;
+    const c = hm[k] || (hm[k] = [0, 0]); c[0]++; if (S.loop === 4) c[1]++;
+    if (!isDemo && ++heatTick % 50 === 0) saveHeat();
+    if (heatTick % 10 === 0) olDirty = true;
+  }
   // 開ける動作（1秒あたり5%以上開けた区間）の記録
   if (rate != null){
     if (!opening){
@@ -995,7 +1008,46 @@ function tpsRate(now){
 }
 function saveOl(){ try{ localStorage.setItem('pcxOlEv', JSON.stringify(olEv)); }catch(e){} }
 const med = arr => { if (!arr.length) return null; const a = [...arr].sort((x,y) => x-y), m = a.length >> 1; return a.length % 2 ? a[m] : (a[m-1]+a[m])/2; };
+const HM_T = [5,10,15,20,25,30,40,50,70,101];
+let heat = {}, heatDemo = {}, heatTick = 0;
+try{ heat = JSON.parse(localStorage.getItem('pcxHeat') || '{}') || {}; }catch(e){ heat = {}; }
+function saveHeat(){ try{ localStorage.setItem('pcxHeat', JSON.stringify(heat)); }catch(e){} }
+function hmKey(tps, rpm){
+  let c = 0; while (c < HM_T.length - 2 && tps >= HM_T[c+1]) c++;
+  return c + '_' + Math.min(9, Math.floor(rpm / 1000));
+}
+function renderHeat(){
+  const hm = mode === 'demo' ? heatDemo : heat;
+  const c = $('hmCv'), dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w*dpr) || c.height !== Math.round(h*dpr)){ c.width = Math.round(w*dpr); c.height = Math.round(h*dpr); }
+  const x = c.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,w,h);
+  const cs = getComputedStyle(document.documentElement), col = v => cs.getPropertyValue(v).trim();
+  const L = 34, R = 4, T = 4, B = 18, nc = HM_T.length - 1, nr = 10;
+  const cw = (w - L - R) / nc, ch = (h - T - B) / nr;
+  x.font = '9px "DotGothic16",monospace'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  let tot = 0, totK = 0;
+  for (let ci = 0; ci < nc; ci++) for (let ri = 0; ri < nr; ri++){
+    const d = hm[ci + '_' + ri], px = L + ci*cw, py = T + (nr - 1 - ri)*ch;
+    x.strokeStyle = col('--line'); x.lineWidth = .5; x.strokeRect(px + .5, py + .5, cw - 1, ch - 1);
+    if (!d) continue;
+    tot += d[0]; totK += d[1];
+    if (d[0] < 20) continue;
+    const r = d[1] / d[0];
+    x.globalAlpha = .12 + r * .88; x.fillStyle = col('--rich'); x.fillRect(px + 1, py + 1, cw - 2, ch - 2); x.globalAlpha = 1;
+    if (cw >= 22){ x.fillStyle = r > .5 ? '#170400' : col('--ink'); x.fillText(Math.round(r*100), px + cw/2, py + ch/2 + .5); }
+  }
+  x.fillStyle = col('--sub'); x.textAlign = 'right';
+  for (const ri of [0, 5, 9]) x.fillText(ri === 0 ? '0' : ri + '千', L - 4, T + (nr - 1 - ri)*ch + ch/2);
+  x.textAlign = 'center'; x.textBaseline = 'alphabetic';
+  for (let ci = 0; ci < nc; ci++) if (ci % 2 === 0 || ci === nc - 1) x.fillText(HM_T[ci] + '', L + ci*cw, h - 4);
+  x.fillText('100', w - R - 6, h - 4);
+  $('hmInfo').textContent = tot
+    ? (mode === 'demo' ? '（デモ・保存しません）' : '') + '集計 ' + tot + '件、そのうちO2制御外 ' + Math.round(totK / tot * 100) + '%。マスの数字は制御外だった割合（%）、空白はデータ不足（20件未満）。開度5%未満（減速）は除外。'
+    : '走行データから自動で作ります。マスの数字はO2制御外だった割合（%）、空白はデータ不足（20件未満）です。開度5%未満（減速）は除外しています。';
+}
+
 function renderOl(){
+  renderHeat();
   olDirty = false;
   const ev = mode === 'demo' ? olDemo : olEv, n = ev.length;
   if (!n){ $('olSum').textContent = 'まだ記録がありません。O2制御中から加速して「高負荷」に切り替わると自動で記録します。'; $('olTbl').innerHTML = ''; }
@@ -1018,10 +1070,10 @@ function renderOl(){
     rh += '<tr><td>' + lab + '</td><td>' + g.length + '</td><td>' + k + '</td><td>' + (g.length ? Math.round(k / g.length * 100) + '%' : '--') + '</td></tr>';
   }
   $('rateTbl').innerHTML = rh;
-  const durs = ev.filter(e => e.dur != null).map(e => e.dur);
+  const dv = ev.filter(e => e.dur2 != null), durs = dv.map(e => e.dur2), nClose = dv.filter(e => e.end === 'close').length;
   $('durInfo').textContent = durs.length
-    ? 'オープンループが続いた時間：中央値 ' + med(durs).toFixed(1) + '秒（' + Math.min(...durs).toFixed(1) + '〜' + Math.max(...durs).toFixed(1) + '秒、' + durs.length + '回）'
-    : 'オープンループが続いた時間：まだ記録がありません';
+    ? 'オープンループが続いた時間：中央値 ' + med(durs).toFixed(1) + '秒（' + Math.min(...durs).toFixed(1) + '〜' + Math.max(...durs).toFixed(1) + '秒、' + durs.length + '回）。うち' + nClose + '回はO2制御に戻る前にスロットルを閉じた（その時点で区切り）'
+    : 'オープンループが続いた時間：まだ記録がありません（開け続けている間だけを数えます）';
   const c = $('olCv'), dpr = window.devicePixelRatio || 1, w = c.clientWidth, hh = c.clientHeight;
   if (c.width !== Math.round(w*dpr) || c.height !== Math.round(hh*dpr)){ c.width = Math.round(w*dpr); c.height = Math.round(hh*dpr); }
   const x = c.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,w,hh);
@@ -1251,9 +1303,9 @@ $('bBaseClr').onclick = () => {
 baseInfo();
 buildRing(); setRing(null); setButtons();
 $('bOlClr').onclick = () => {
-  if (!olEv.length && !opEv.length) return;
+  if (!olEv.length && !opEv.length && !Object.keys(heat).length) return;
   if (!confirm('O2制御が外れた開度の記録（' + olEv.length + '回分）を消去します。元に戻せません。よろしいですか？')) return;
-  olEv = []; saveOl(); opEv = []; saveOp(); renderOl();
+  olEv = []; saveOl(); opEv = []; saveOp(); heat = {}; saveHeat(); renderOl();
 };
 setTimeout(renderOl, 0);
 try{ const d = localStorage.getItem('pcxDisp'); if (d) $('sDisp').value = d; }catch(e){}
@@ -1283,11 +1335,11 @@ setInterval(() => { if (!document.hidden) fetchWx(); }, 30*60e3);
 $('iAuto').onchange = () => { try{ localStorage.setItem('pcx_iAuto', $('iAuto').checked ? '1' : '0'); }catch(e){} render(); };
 $('sDisp').onchange = () => { try{ localStorage.setItem('pcxDisp', $('sDisp').value); }catch(e){} setScale(); render(); };
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { if (rec) persistRec(); return; }
+  if (document.hidden) { if (rec) persistRec(); saveHeat(); return; }
   if (mode) keepAwake();
   if (dev && !userStop && mode === 'ble' && !running && !reconnecting) reconnect();
 });
-window.addEventListener('pagehide', () => { if (rec) persistRec(); });
+window.addEventListener('pagehide', () => { if (rec) persistRec(); saveHeat(); });
 $('bPocket').onclick = () => setPocket(true);
 restoreRec();
 window.addEventListener('resize', () => { draw(); renderOl(); });
