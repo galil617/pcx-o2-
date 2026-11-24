@@ -352,6 +352,7 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <div class="row">
       <label class="field">鳴らし方
         <select id="sVMode">
+          <option value="duck">音楽を一時的に下げて、終わったら戻す（試験的）</option>
           <option value="mix">音楽に重ねて鳴らす（消音スイッチはオフに）</option>
           <option value="stop">音楽を止めて鳴らす（消音中でも鳴る）</option>
         </select>
@@ -421,7 +422,7 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <pre class="log" id="log"></pre>
   </details>
   <p class="note" style="text-align:center">音声：VOICEVOX:ナースロボ＿タイプＴ</p>
-  <p class="note" style="text-align:center">版：v46（2026-11-24）</p>
+  <p class="note" style="text-align:center">版：v47（2026-11-25）</p>
 </main>
 
 <script>
@@ -1322,7 +1323,8 @@ async function voiceInit(){
   try{
     const mix = vmode() === 'mix';
     // 鳴らし方：重ねる＝他の音と混ぜる（消音スイッチで消える）／止める＝再生扱い（消音中でも鳴る）
-    try{ if (navigator.audioSession) navigator.audioSession.type = mix ? 'ambient' : 'playback'; }catch(e){}
+    const duck = vmode() === 'duck';
+    try{ if (navigator.audioSession) navigator.audioSession.type = mix ? 'ambient' : duck ? 'ambient' : 'playback'; }catch(e){}
     if (mix){
       if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
       if (actx.state === 'suspended') actx.resume();
@@ -1346,7 +1348,8 @@ async function voiceInit(){
       ok++;
     }));
     $('voiceInfo').textContent = '音声ファイル ' + ok + '/' + VOICES.length + '個を見つけました。' + (miss.length ? '見つからない：' + miss.join('、') + '。' : '') +
-      (mix ? '（重ねて鳴らす・' + (navigator.audioSession ? '切り替え対応' : '切り替え非対応のため既定の動作') + '）' : '（止めて鳴らす）');
+      (mix ? '（重ねて鳴らす・' + (navigator.audioSession ? '切り替え対応' : '切り替え非対応のため既定の動作') + '）'
+       : duck ? '（下げて戻す・' + (navigator.audioSession ? '切り替え対応' : '切り替え非対応のため音楽は止まります') + '）' : '（止めて鳴らす）');
   }catch(e){ $('voiceInfo').textContent = '音声を準備できませんでした：' + errStr(e); }
 }
 function say(k, force){
@@ -1362,6 +1365,11 @@ function say(k, force){
       const src = actx.createBufferSource(); src.buffer = vbuf[k]; src.connect(g); src.start(0);
     } else {
       if (!vel) return;
+      if (vmode() === 'duck'){
+        // しゃべる直前だけ「一時的な音」扱いにして音楽を下げ、終わったら手放して音楽に戻ってもらう
+        try{ if (navigator.audioSession) navigator.audioSession.type = 'transient'; }catch(e){}
+        vel.onended = () => { try{ if (navigator.audioSession) navigator.audioSession.type = 'ambient'; }catch(e){} vel.removeAttribute('src'); try{ vel.load(); }catch(e){} };
+      } else vel.onended = null;
       vel.src = vfound[k]; vel.volume = +$('iVol').value;
       vel.play().catch(e => { $('voiceInfo').textContent = '再生できませんでした：' + errStr(e); });
     }
