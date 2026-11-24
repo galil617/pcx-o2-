@@ -37,6 +37,7 @@ h1{font-family:var(--min);font-weight:400;font-size:22px;margin:0;flex:1 0 auto;
 button,select,input{font:inherit;color:inherit}
 .btn{border:1px solid var(--hot);background:rgba(255,138,40,.06);color:var(--ink);border-radius:2px;padding:6px 14px;font-weight:400;cursor:pointer;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
 .btn.primary{background:var(--hot);color:#140800;box-shadow:0 0 16px rgba(255,138,40,.35)}
+.btn#bVoice[aria-pressed="false"]{opacity:.55;border-style:dashed}
 .btn:disabled{opacity:.35;cursor:default;box-shadow:none}
 .btn:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--lean);outline-offset:2px}
 .status{font-family:var(--read);font-size:13px;color:var(--sub);width:100%;line-height:1.5;height:4.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
@@ -169,6 +170,7 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <button class="btn primary" id="bConnect">ELM327に接続</button>
     <button class="btn" id="bDemo">デモ</button>
     <button class="btn" id="bStop" disabled>停止</button>
+    <button class="btn" id="bVoice" aria-pressed="true">音声 ON</button>
     <div class="status" id="status">キーをONにしてから接続してください。</div>
   </header>
 
@@ -347,6 +349,14 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
       <label class="field">音量（iPhoneは本体の音量で調整）<input id="iVol" type="range" min="0" max="1" step="0.05" value="0.9" style="width:140px"></label>
       <button class="btn" id="bVoiceTest">試聴</button>
     </div>
+    <div class="row">
+      <label class="field">鳴らし方
+        <select id="sVMode">
+          <option value="mix">音楽に重ねて鳴らす（消音スイッチはオフに）</option>
+          <option value="stop">音楽を止めて鳴らす（消音中でも鳴る）</option>
+        </select>
+      </label>
+    </div>
     <p class="note num" id="voiceInfo">音声ファイルは「voice」フォルダか、アプリと同じ場所に置きます。「接続」か「デモ」を押したときに読み込みます。</p>
     <div class="row" style="margin-top:10px">
       <label class="field">メイン表示
@@ -411,7 +421,7 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <pre class="log" id="log"></pre>
   </details>
   <p class="note" style="text-align:center">音声：VOICEVOX:ナースロボ＿タイプＴ</p>
-  <p class="note" style="text-align:center">版：v45（2026-11-24）</p>
+  <p class="note" style="text-align:center">版：v46（2026-11-24）</p>
 </main>
 
 <script>
@@ -1304,35 +1314,57 @@ function restoreRec(){
 /* ---------- 音声案内 ---------- */
 const VOICES = ['connect','lost','back','rich','lean','cut','openloop'];
 const VOICE_GAP = {connect:5, lost:20, back:20, rich:30, lean:30, cut:60, openloop:60};
-let vel = null, vfound = {}, vlast = {};
+let vel = null, vfound = {}, vlast = {}, actx = null, vbuf = {};
 const SILENT = 'data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YSADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
+const vmode = () => $('sVMode').value;
 async function voiceInit(){
   if (!$('iVoice').checked) return;
   try{
-    // iPhoneの消音スイッチがオンでも鳴るように「再生」扱いにする（対応ブラウザのみ）
-    try{ if (navigator.audioSession) navigator.audioSession.type = 'playback'; }catch(e){}
-    if (!vel){ vel = new Audio(); vel.setAttribute('playsinline', ''); vel.preload = 'auto'; }
-    // ボタンを押した瞬間に無音を鳴らして、以後の再生を許可させる
-    vel.src = SILENT; vel.play().catch(() => {});
+    const mix = vmode() === 'mix';
+    // 鳴らし方：重ねる＝他の音と混ぜる（消音スイッチで消える）／止める＝再生扱い（消音中でも鳴る）
+    try{ if (navigator.audioSession) navigator.audioSession.type = mix ? 'ambient' : 'playback'; }catch(e){}
+    if (mix){
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+      const b = actx.createBuffer(1, 1, 22050), src = actx.createBufferSource(); src.buffer = b; src.connect(actx.destination); src.start(0);
+    } else {
+      if (!vel){ vel = new Audio(); vel.setAttribute('playsinline', ''); vel.preload = 'auto'; }
+      vel.src = SILENT; vel.play().catch(() => {});
+    }
     let ok = 0; const miss = [];
     await Promise.all(VOICES.map(async k => {
-      if (vfound[k]) { ok++; return; }
-      for (const path of ['voice/' + k + '.wav', 'voice/' + k + '.mp3', 'voice/' + k + '.m4a', k + '.wav', k + '.mp3', k + '.m4a']){
-        try{ const r = await fetch(path, {method:'HEAD', cache:'no-store'}); if (r.ok){ vfound[k] = path; break; } }catch(e){}
+      if (!vfound[k]){
+        for (const path of ['voice/' + k + '.wav', 'voice/' + k + '.mp3', 'voice/' + k + '.m4a', k + '.wav', k + '.mp3', k + '.m4a']){
+          try{ const r = await fetch(path, {method:'HEAD', cache:'no-store'}); if (r.ok){ vfound[k] = path; break; } }catch(e){}
+        }
       }
-      if (vfound[k]) ok++; else miss.push(k);
+      if (!vfound[k]){ miss.push(k); return; }
+      if (mix && !vbuf[k]){
+        try{ const ab = await (await fetch(vfound[k])).arrayBuffer();
+          vbuf[k] = await new Promise(res => actx.decodeAudioData(ab, res, () => res(null))); }catch(e){}
+      }
+      ok++;
     }));
-    $('voiceInfo').textContent = '音声ファイル ' + ok + '/' + VOICES.length + '個を見つけました。' + (miss.length ? '見つからない：' + miss.join('、') : '');
+    $('voiceInfo').textContent = '音声ファイル ' + ok + '/' + VOICES.length + '個を見つけました。' + (miss.length ? '見つからない：' + miss.join('、') + '。' : '') +
+      (mix ? '（重ねて鳴らす・' + (navigator.audioSession ? '切り替え対応' : '切り替え非対応のため既定の動作') + '）' : '（止めて鳴らす）');
   }catch(e){ $('voiceInfo').textContent = '音声を準備できませんでした：' + errStr(e); }
 }
 function say(k, force){
-  if (!$('iVoice').checked || !vel || !vfound[k]) return;
+  if (!$('iVoice').checked || !vfound[k]) return;
   const now = performance.now() / 1000;
   if (!force && vlast[k] && now - vlast[k] < (VOICE_GAP[k] || 20)) return;
   vlast[k] = now;
   try{
-    vel.src = vfound[k]; vel.volume = +$('iVol').value;
-    vel.play().catch(e => { $('voiceInfo').textContent = '再生できませんでした：' + errStr(e); });
+    if (vmode() === 'mix'){
+      if (!actx || !vbuf[k]) return;
+      if (actx.state === 'suspended') actx.resume();
+      const g = actx.createGain(); g.gain.value = +$('iVol').value; g.connect(actx.destination);
+      const src = actx.createBufferSource(); src.buffer = vbuf[k]; src.connect(g); src.start(0);
+    } else {
+      if (!vel) return;
+      vel.src = vfound[k]; vel.volume = +$('iVol').value;
+      vel.play().catch(e => { $('voiceInfo').textContent = '再生できませんでした：' + errStr(e); });
+    }
   }catch(e){}
 }
 
@@ -1383,7 +1415,17 @@ $('bDemo').onclick = () => { voiceInit().then(() => say('connect')); startDemo()
 $('bVoiceTest').onclick = async () => { await voiceInit(); say('connect', true); };
 $('iVol').oninput = () => { if (vel) vel.volume = +$('iVol').value; try{ localStorage.setItem('pcx_iVol', $('iVol').value); }catch(e){} };
 try{ const v = localStorage.getItem('pcx_iVoice'); if (v != null) $('iVoice').checked = v === '1'; const vo = localStorage.getItem('pcx_iVol'); if (vo != null) $('iVol').value = vo; }catch(e){}
-$('iVoice').onchange = () => { try{ localStorage.setItem('pcx_iVoice', $('iVoice').checked ? '1' : '0'); }catch(e){} };
+try{ const m = localStorage.getItem('pcx_sVMode'); if (m) $('sVMode').value = m; }catch(e){}
+$('sVMode').onchange = () => { try{ localStorage.setItem('pcx_sVMode', $('sVMode').value); }catch(e){} };
+function syncVoiceBtn(){ const on = $('iVoice').checked; $('bVoice').textContent = on ? '音声 ON' : '音声 OFF'; $('bVoice').setAttribute('aria-pressed', on ? 'true' : 'false'); }
+function setVoice(on){
+  $('iVoice').checked = on; try{ localStorage.setItem('pcx_iVoice', on ? '1' : '0'); }catch(e){}
+  syncVoiceBtn();
+  if (on) voiceInit(); else if (vel){ try{ vel.pause(); }catch(e){} }
+}
+$('iVoice').onchange = () => setVoice($('iVoice').checked);
+$('bVoice').onclick = () => setVoice(!$('iVoice').checked);
+syncVoiceBtn();
 
 $('bStop').onclick = () => { userStop = true; stop(); status('停止しました。'); };
 $('bRec').onclick = () => {
