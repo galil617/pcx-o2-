@@ -341,6 +341,13 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
 
   <details class="box">
     <summary><span style="font-family:var(--min);font-weight:400;font-size:17px;color:#ff8a1c">設定</span><span class="en">CONFIG</span></summary>
+    <h2 style="margin-top:10px">音声案内<span class="en">VOICE</span></h2>
+    <div class="row">
+      <label class="field" style="flex-direction:row;align-items:center;gap:6px;font-size:13px"><input id="iVoice" type="checkbox" checked style="width:auto">音声案内を使う</label>
+      <label class="field">音量<input id="iVol" type="range" min="0" max="1" step="0.05" value="0.9" style="width:140px"></label>
+      <button class="btn" id="bVoiceTest">試聴</button>
+    </div>
+    <p class="note num" id="voiceInfo">音声ファイルは「voice」フォルダか、アプリと同じ場所に置きます。「接続」か「デモ」を押したときに読み込みます。</p>
     <div class="row" style="margin-top:10px">
       <label class="field">メイン表示
         <select id="sDisp">
@@ -403,7 +410,8 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <summary><span style="font-family:var(--min);font-weight:400;font-size:17px;color:#ff8a1c">通信ログ</span><span class="en">COMM LOG</span></summary>
     <pre class="log" id="log"></pre>
   </details>
-  <p class="note" style="text-align:center">版：v42（2026-11-21）</p>
+  <p class="note" style="text-align:center">音声：VOICEVOX:ナースロボ＿タイプＴ</p>
+  <p class="note" style="text-align:center">版：v44（2026-11-24）</p>
 </main>
 
 <script>
@@ -588,7 +596,7 @@ function onDisconnect(){
   if (mode !== 'ble') return;
   running = false; pending = null;
   if (userStop){ stop(); status('アダプターとの接続が切れました。'); return; }
-  log('接続が切れました。自動で再接続します');
+  log('接続が切れました。自動で再接続します'); say('lost');
   reconnect();
 }
 async function reconnect(){
@@ -607,7 +615,7 @@ async function reconnect(){
       await cmd('ATE0', 2000, true);
       const b = parse(await cmd('0100', 15000, true), '00');
       if (!b) throw new Error('車両から応答なし');
-      log('再接続しました（' + i + '回目）');
+      log('再接続しました（' + i + '回目）'); say('back');
       status('再接続しました。' + (rec ? '記録を再開しています。' : ''));
       reconnecting = false; keepAwake(); poll(); return;
     }catch(e){
@@ -646,6 +654,7 @@ async function initElm(){
     status('接続しましたが、この車両は短期燃料補正（PID 06）を出していません。他の項目だけ表示します。');
   } else {
     status('接続しました。' + dp.replace(/[\r\n>]+/g,' ').trim() + '　暖機してO2制御中になると補正値が動きます。');
+    say('connect');
   }
 }
 
@@ -784,7 +793,7 @@ function buildRing(){
   g.appendChild(mk('circle', {cx:CX, cy:CY, r:5, fill:'#140a04', stroke:'rgba(255,179,71,.6)', 'stroke-width':1.2}));
   setScale();
 }
-let outerCur = 0, outerTo = 0, outerAnim = null;
+let outerCur = 0, outerTo = 0, outerAnim = null, lastJt = '';
 function drawOuter(v){
   const t = document.getElementById('outerThick'), c = document.getElementById('outerCap'); if (!t) return;
   const vv = Math.max(-24.9, Math.min(RANGE, v));
@@ -898,11 +907,11 @@ function ingest(){
   const dur = +$('iDur').value * 1000, rTh = +$('iRich').value, lTh = +$('iLean').value;
   if (a != null && a <= rTh){
     if (richStart == null) richStart = now;
-    if (!richActive && now - richStart >= dur){ richActive = true; richN++; if (navigator.vibrate) navigator.vibrate([120,80,120]); }
+    if (!richActive && now - richStart >= dur){ richActive = true; richN++; say('rich'); if (navigator.vibrate) navigator.vibrate([120,80,120]); }
   } else { richStart = null; richActive = false; }
   if (a != null && a >= lTh){
     if (leanStart == null) leanStart = now;
-    if (!leanActive && now - leanStart >= dur){ leanActive = true; leanN++; if (navigator.vibrate) navigator.vibrate(300); }
+    if (!leanActive && now - leanStart >= dur){ leanActive = true; leanN++; say('lean'); if (navigator.vibrate) navigator.vibrate(300); }
   } else { leanStart = null; leanActive = false; }
 
   ctrlJ = judgeCtrl(now, a);
@@ -1206,6 +1215,9 @@ function render(){
   setBar('bRpm', S.rpm != null ? S.rpm/10000 : null, S.rpm != null ? String(Math.round(S.rpm/10)*10) : '--', S.rpm != null && S.rpm >= 8500);
   setBar('bMap', S.map != null ? S.map/110 : null, S.map != null ? String(Math.round(S.map)) : '--', false);
   const jt = $('judge').textContent;
+  if (jt.includes('燃料減量中') && !lastJt.includes('燃料減量中')) say('cut');
+  if (jt.includes('燃料増量中') && !lastJt.includes('燃料増量中')) say('openloop');
+  lastJt = jt;
   $('judge').classList.toggle('hot', jt.includes('燃料増量中'));
   $('judge').classList.toggle('cold', jt.includes('燃料減量中'));
   $('cLoop').parentElement.classList.toggle('alarm', S.loop != null && S.loop !== 2 && S.loop !== 1 && S.loop !== 0);
@@ -1289,6 +1301,42 @@ function restoreRec(){
     }
   }catch(e){}
 }
+/* ---------- 音声案内 ---------- */
+const VOICES = ['connect','lost','back','rich','lean','cut','openloop'];
+const VOICE_GAP = {connect:5, lost:20, back:20, rich:30, lean:30, cut:60, openloop:60};
+let actx = null, vbuf = {}, vlast = {}, vgain = null;
+async function voiceInit(){
+  if (!$('iVoice').checked) return;
+  try{
+    if (!actx){ actx = new (window.AudioContext || window.webkitAudioContext)(); vgain = actx.createGain(); vgain.connect(actx.destination); }
+    if (actx.state === 'suspended') await actx.resume();
+    vgain.gain.value = +$('iVol').value;
+    // 無音を一瞬鳴らして再生を許可させる（iPhone対策）
+    const b = actx.createBuffer(1, 1, 22050), src = actx.createBufferSource(); src.buffer = b; src.connect(vgain); src.start(0);
+    let ok = 0;
+    await Promise.all(VOICES.map(async k => {
+      if (vbuf[k]) { ok++; return; }
+      for (const path of ['voice/' + k + '.wav', 'voice/' + k + '.mp3', 'voice/' + k + '.m4a', k + '.wav', k + '.mp3', k + '.m4a']){
+        try{
+          const r = await fetch(path, {cache:'force-cache'});
+          if (!r.ok) continue;
+          const ab = await r.arrayBuffer();
+          vbuf[k] = await new Promise(res => actx.decodeAudioData(ab, res, () => res(null)));
+        }catch(e){}
+        if (vbuf[k]) { ok++; break; }
+      }
+    }));
+    $('voiceInfo').textContent = '音声ファイル ' + ok + '/' + VOICES.length + '個を読み込みました。';
+  }catch(e){ $('voiceInfo').textContent = '音声を準備できませんでした：' + errStr(e); }
+}
+function say(k){
+  if (!$('iVoice').checked || !actx || !vbuf[k]) return;
+  const now = performance.now() / 1000;
+  if (vlast[k] && now - vlast[k] < (VOICE_GAP[k] || 20)) return;
+  vlast[k] = now;
+  try{ vgain.gain.value = +$('iVol').value; const src = actx.createBufferSource(); src.buffer = vbuf[k]; src.connect(vgain); src.start(0); }catch(e){}
+}
+
 /* ---------- ポケットモード ---------- */
 function setPocket(on){
   pocket = on; $('pocket').classList.toggle('on', on);
@@ -1331,8 +1379,12 @@ function saveCsv(){
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
-$('bConnect').onclick = connect;
-$('bDemo').onclick = startDemo;
+$('bConnect').onclick = () => { voiceInit(); connect(); };
+$('bDemo').onclick = () => { voiceInit().then(() => say('connect')); startDemo(); };
+$('bVoiceTest').onclick = async () => { await voiceInit(); vlast = {}; say('connect'); };
+try{ const v = localStorage.getItem('pcx_iVoice'); if (v != null) $('iVoice').checked = v === '1'; const vo = localStorage.getItem('pcx_iVol'); if (vo != null) $('iVol').value = vo; }catch(e){}
+$('iVoice').onchange = () => { try{ localStorage.setItem('pcx_iVoice', $('iVoice').checked ? '1' : '0'); }catch(e){} };
+$('iVol').onchange = () => { try{ localStorage.setItem('pcx_iVol', $('iVol').value); }catch(e){} if (vgain) vgain.gain.value = +$('iVol').value; };
 $('bStop').onclick = () => { userStop = true; stop(); status('停止しました。'); };
 $('bRec').onclick = () => {
   rec = !rec;
