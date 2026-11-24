@@ -344,7 +344,7 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <h2 style="margin-top:10px">音声案内<span class="en">VOICE</span></h2>
     <div class="row">
       <label class="field" style="flex-direction:row;align-items:center;gap:6px;font-size:13px"><input id="iVoice" type="checkbox" checked style="width:auto">音声案内を使う</label>
-      <label class="field">音量<input id="iVol" type="range" min="0" max="1" step="0.05" value="0.9" style="width:140px"></label>
+      <label class="field">音量（iPhoneは本体の音量で調整）<input id="iVol" type="range" min="0" max="1" step="0.05" value="0.9" style="width:140px"></label>
       <button class="btn" id="bVoiceTest">試聴</button>
     </div>
     <p class="note num" id="voiceInfo">音声ファイルは「voice」フォルダか、アプリと同じ場所に置きます。「接続」か「デモ」を押したときに読み込みます。</p>
@@ -411,7 +411,7 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <pre class="log" id="log"></pre>
   </details>
   <p class="note" style="text-align:center">音声：VOICEVOX:ナースロボ＿タイプＴ</p>
-  <p class="note" style="text-align:center">版：v44（2026-11-24）</p>
+  <p class="note" style="text-align:center">版：v45（2026-11-24）</p>
 </main>
 
 <script>
@@ -1304,37 +1304,36 @@ function restoreRec(){
 /* ---------- 音声案内 ---------- */
 const VOICES = ['connect','lost','back','rich','lean','cut','openloop'];
 const VOICE_GAP = {connect:5, lost:20, back:20, rich:30, lean:30, cut:60, openloop:60};
-let actx = null, vbuf = {}, vlast = {}, vgain = null;
+let vel = null, vfound = {}, vlast = {};
+const SILENT = 'data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YSADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
 async function voiceInit(){
   if (!$('iVoice').checked) return;
   try{
-    if (!actx){ actx = new (window.AudioContext || window.webkitAudioContext)(); vgain = actx.createGain(); vgain.connect(actx.destination); }
-    if (actx.state === 'suspended') await actx.resume();
-    vgain.gain.value = +$('iVol').value;
-    // 無音を一瞬鳴らして再生を許可させる（iPhone対策）
-    const b = actx.createBuffer(1, 1, 22050), src = actx.createBufferSource(); src.buffer = b; src.connect(vgain); src.start(0);
-    let ok = 0;
+    // iPhoneの消音スイッチがオンでも鳴るように「再生」扱いにする（対応ブラウザのみ）
+    try{ if (navigator.audioSession) navigator.audioSession.type = 'playback'; }catch(e){}
+    if (!vel){ vel = new Audio(); vel.setAttribute('playsinline', ''); vel.preload = 'auto'; }
+    // ボタンを押した瞬間に無音を鳴らして、以後の再生を許可させる
+    vel.src = SILENT; vel.play().catch(() => {});
+    let ok = 0; const miss = [];
     await Promise.all(VOICES.map(async k => {
-      if (vbuf[k]) { ok++; return; }
+      if (vfound[k]) { ok++; return; }
       for (const path of ['voice/' + k + '.wav', 'voice/' + k + '.mp3', 'voice/' + k + '.m4a', k + '.wav', k + '.mp3', k + '.m4a']){
-        try{
-          const r = await fetch(path, {cache:'force-cache'});
-          if (!r.ok) continue;
-          const ab = await r.arrayBuffer();
-          vbuf[k] = await new Promise(res => actx.decodeAudioData(ab, res, () => res(null)));
-        }catch(e){}
-        if (vbuf[k]) { ok++; break; }
+        try{ const r = await fetch(path, {method:'HEAD', cache:'no-store'}); if (r.ok){ vfound[k] = path; break; } }catch(e){}
       }
+      if (vfound[k]) ok++; else miss.push(k);
     }));
-    $('voiceInfo').textContent = '音声ファイル ' + ok + '/' + VOICES.length + '個を読み込みました。';
+    $('voiceInfo').textContent = '音声ファイル ' + ok + '/' + VOICES.length + '個を見つけました。' + (miss.length ? '見つからない：' + miss.join('、') : '');
   }catch(e){ $('voiceInfo').textContent = '音声を準備できませんでした：' + errStr(e); }
 }
-function say(k){
-  if (!$('iVoice').checked || !actx || !vbuf[k]) return;
+function say(k, force){
+  if (!$('iVoice').checked || !vel || !vfound[k]) return;
   const now = performance.now() / 1000;
-  if (vlast[k] && now - vlast[k] < (VOICE_GAP[k] || 20)) return;
+  if (!force && vlast[k] && now - vlast[k] < (VOICE_GAP[k] || 20)) return;
   vlast[k] = now;
-  try{ vgain.gain.value = +$('iVol').value; const src = actx.createBufferSource(); src.buffer = vbuf[k]; src.connect(vgain); src.start(0); }catch(e){}
+  try{
+    vel.src = vfound[k]; vel.volume = +$('iVol').value;
+    vel.play().catch(e => { $('voiceInfo').textContent = '再生できませんでした：' + errStr(e); });
+  }catch(e){}
 }
 
 /* ---------- ポケットモード ---------- */
@@ -1381,10 +1380,11 @@ function saveCsv(){
 
 $('bConnect').onclick = () => { voiceInit(); connect(); };
 $('bDemo').onclick = () => { voiceInit().then(() => say('connect')); startDemo(); };
-$('bVoiceTest').onclick = async () => { await voiceInit(); vlast = {}; say('connect'); };
+$('bVoiceTest').onclick = async () => { await voiceInit(); say('connect', true); };
+$('iVol').oninput = () => { if (vel) vel.volume = +$('iVol').value; try{ localStorage.setItem('pcx_iVol', $('iVol').value); }catch(e){} };
 try{ const v = localStorage.getItem('pcx_iVoice'); if (v != null) $('iVoice').checked = v === '1'; const vo = localStorage.getItem('pcx_iVol'); if (vo != null) $('iVol').value = vo; }catch(e){}
 $('iVoice').onchange = () => { try{ localStorage.setItem('pcx_iVoice', $('iVoice').checked ? '1' : '0'); }catch(e){} };
-$('iVol').onchange = () => { try{ localStorage.setItem('pcx_iVol', $('iVol').value); }catch(e){} if (vgain) vgain.gain.value = +$('iVol').value; };
+
 $('bStop').onclick = () => { userStop = true; stop(); status('停止しました。'); };
 $('bRec').onclick = () => {
   rec = !rec;
