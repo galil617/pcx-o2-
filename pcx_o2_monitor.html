@@ -382,6 +382,14 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
       <label class="field">薄い警告（%以上）<input id="iLean" type="number" value="15" step="1" min="0"></label>
       <label class="field">継続（秒）<input id="iDur" type="number" value="3" step="0.5" min="0.5"></label>
     </div>
+    <h2 style="margin-top:14px">開度の補正<span class="en">THROTTLE CAL</span></h2>
+    <p class="note num" id="calInfo">走行中の最小値を全閉、最大値を全開として自動で学習します。</p>
+    <div class="row">
+      <label class="field">全閉の値（空欄で自動）<input id="iTpsMin" type="number" step="0.1" placeholder="自動"></label>
+      <label class="field">全開の値（空欄で自動）<input id="iTpsMax" type="number" step="0.1" placeholder="自動"></label>
+      <button class="btn" id="bCalReset">学習をやり直す</button>
+    </div>
+    <p class="note">PCXはスロットルを閉じてもOBDの開度が0%にならず、12〜14%前後を示します。アプリはこれを0%として換算し、全開を100%にそろえます。全開の学習値が85%未満のうちは、85%を全開とみなします。</p>
     <h2 style="margin-top:14px">高負荷域の想定空燃比</h2>
     <div class="row">
       <label class="field">純正の高負荷目標AFR（想定）<input id="iTgt" type="number" value="12.8" step="0.1" min="10" max="15"></label>
@@ -422,7 +430,7 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <pre class="log" id="log"></pre>
   </details>
   <p class="note" style="text-align:center">音声：VOICEVOX:ナースロボ＿タイプＴ</p>
-  <p class="note" style="text-align:center">版：v47（2026-11-25）</p>
+  <p class="note" style="text-align:center">版：v48（2026-11-25）</p>
 </main>
 
 <script>
@@ -441,7 +449,23 @@ function setScale(){
   else { $('scL').textContent = '−25% 濃い'; $('scM').textContent = '0'; $('scR').textContent = '薄い +25%'; }
 }
 
-const S = {stft:null,rpm:null,tps:null,ect:null,loop:null,map:null,load:null,iat:null,adv:null};
+/* ---------- 開度の補正（OBDの生値→全閉0%・全開100%） ---------- */
+let cal = {min:null, max:null};
+try{ cal = JSON.parse(localStorage.getItem('pcxTpsCal') || '{}') || {}; }catch(e){ cal = {}; }
+let calDirty = 0;
+function saveCal(){ try{ localStorage.setItem('pcxTpsCal', JSON.stringify(cal)); }catch(e){} }
+function calMin(){ const m = $('iTpsMin') && $('iTpsMin').value; return m !== '' && m != null ? +m : (cal.min != null ? cal.min : null); }
+function calMax(){ const m = $('iTpsMax') && $('iTpsMax').value; return m !== '' && m != null ? +m : Math.max(cal.max != null ? cal.max : 0, 85); }
+function tpsRel(raw){
+  if (raw == null) return null;
+  if (raw >= 1 && (cal.min == null || raw < cal.min)){ cal.min = raw; calDirty++; }
+  if (cal.max == null || raw > cal.max){ cal.max = raw; calDirty++; }
+  if (calDirty){ calDirty = 0; saveCal(); }
+  const lo = calMin(), hi = calMax();
+  if (lo == null || hi - lo < 20) return raw;
+  return Math.max(0, Math.min(100, (raw - lo) / (hi - lo) * 100));
+}
+const S = {stft:null,rpm:null,tps:null,tpsRaw:null,ect:null,loop:null,map:null,load:null,iat:null,adv:null};
 let hist = [], rec = false, recData = [], running = false, mode = null, demoTimer = null, wakeLock = null;
 let userStop = false, reconnecting = false, pocket = false;
 let richStart = null, richActive = false, richN = 0, leanStart = null, leanActive = false, leanN = 0;
@@ -680,7 +704,7 @@ async function poll(){
       else if (++stftMiss === 10) status('補正値が途切れています。通信ログを確認してください。');
     }
     const rp = parse(await cmd('010C', 1500), '0C'); if (rp && rp.length > 1) S.rpm = (rp[0]*256 + rp[1]) / 4;
-    const tp = parse(await cmd('0111', 1500), '11'); if (tp) S.tps = tp[0]*100/255;
+    const tp = parse(await cmd('0111', 1500), '11'); if (tp){ S.tpsRaw = tp[0]*100/255; S.tps = tpsRel(S.tpsRaw); }
     const sp = SLOW[n % SLOW.length];
     if (has(sp)){
       const r = parse(await cmd('01' + sp, 1500), sp);
@@ -931,7 +955,7 @@ function ingest(){
     const f = (x, d) => x == null ? '' : (typeof x === 'number' ? x.toFixed(d) : x);
     const oeR = openEst(), eaR = estAdd(), amR = ambNow();
     recData.push([new Date().toISOString(), f(S.stft,1), f(a,1), a != null ? vafr(a).toFixed(2) : '', oeR ? oeR.afr.toFixed(2) : '', S.loop != null ? (LOOP[S.loop] || S.loop) : '',
-      f(S.rpm,0), f(S.tps,1), f(S.map,0), f(S.load,1), f(S.ect,0), f(S.iat,0), f(S.adv,1), amR ? amR.t.toFixed(1) : '', eaR ? eaR.pct.toFixed(1) : '',
+      f(S.rpm,0), f(S.tps,1), f(S.tpsRaw,1), f(S.map,0), f(S.load,1), f(S.ect,0), f(S.iat,0), f(S.adv,1), amR ? amR.t.toFixed(1) : '', eaR ? eaR.pct.toFixed(1) : '',
       richActive ? 1 : 0, leanActive ? 1 : 0, ctrlJ.lv]);
     $('recInfo').textContent = recData.length + '件';
     if (recData.length % 100 === 0) persistRec();
@@ -1167,8 +1191,14 @@ function renderOl(){
   x.lineWidth = 1;
 }
 
+function calText(){
+  const lo = calMin(), hi = calMax();
+  return '学習値：全閉 ' + (cal.min != null ? cal.min.toFixed(1) : '--') + '%・全開 ' + (cal.max != null ? cal.max.toFixed(1) : '--') + '%　換算に使用：' +
+    (lo != null ? lo.toFixed(1) : '--') + '〜' + hi.toFixed(1) + '%' + (S.tpsRaw != null ? '　いまの生値 ' + S.tpsRaw.toFixed(1) + '%' : '');
+}
 function render(){
   if (pocket){ updPocket(); return; }
+  if ($('calInfo')) $('calInfo').textContent = calText();
   if (olDirty) renderOl();
   const now = performance.now(), cl = S.loop === 2, a = cl ? avgStft(now) : null;
   const hero = $('hero'), big = $('big');
@@ -1407,7 +1437,7 @@ function updPocket(){
 })();
 
 function saveCsv(){
-  const head = 'time,stft_pct,stft_avg2s_pct,virtual_afr,open_est_afr,fuel_mode,rpm,tps_pct,map_kpa,load_pct,ect_c,iat_c,advance_deg,ambient_c,est_add_pct,rich_warn,lean_warn,ctrl';
+  const head = 'time,stft_pct,stft_avg2s_pct,virtual_afr,open_est_afr,fuel_mode,rpm,tps_pct,tps_raw_pct,map_kpa,load_pct,ect_c,iat_c,advance_deg,ambient_c,est_add_pct,rich_warn,lean_warn,ctrl';
   const body = recData.map(r => r.map(c => /[",]/.test(String(c)) ? '"' + String(c).replace(/"/g,'""') + '"' : c).join(',')).join('\n');
   const blob = new Blob(['\ufeff' + head + '\n' + body], {type:'text/csv'});
   const a = document.createElement('a'), d = new Date();
@@ -1457,6 +1487,25 @@ $('bBaseClr').onclick = () => {
 };
 baseInfo();
 buildRing(); setRing(null); setButtons();
+for (const id of ['iTpsMin','iTpsMax']){
+  try{ const v = localStorage.getItem('pcx_' + id); if (v != null) $(id).value = v; }catch(e){}
+  $(id).onchange = () => { try{ localStorage.setItem('pcx_' + id, $(id).value); }catch(e){} render(); };
+}
+$('bCalReset').onclick = () => {
+  if (!confirm('開度の学習値（全閉・全開）をリセットします。次の走行で学習し直します。よろしいですか？')) return;
+  cal = {}; saveCal(); render();
+};
+// 開度の補正を入れる前の解析記録は基準がずれているので、退避してから新しく取り直す
+try{
+  if (localStorage.getItem('pcxCalV') !== '1'){
+    for (const k of ['pcxHeat','pcxOlEv','pcxOpEv','pcxLaunch','pcxTrimBase2']){
+      const v = localStorage.getItem(k); if (v) localStorage.setItem(k + '_raw', v); localStorage.removeItem(k);
+    }
+    localStorage.setItem('pcxCalV', '1');
+    heat = {}; olEv = []; opEv = []; lnEv = []; base = {}; setTimeout(() => { baseInfo(); renderOl(); }, 0);
+    setTimeout(() => status('開度の補正を入れたため、これまでの解析記録（地図・切り替わり・発進・基準データ）を退避して、新しく取り直します。'), 0);
+  }
+}catch(e){}
 $('bOlClr').onclick = () => {
   if (!olEv.length && !opEv.length && !lnEv.length && !Object.keys(heat).length) return;
   if (!confirm('O2制御が外れた開度の記録（' + olEv.length + '回分）を消去します。元に戻せません。よろしいですか？')) return;
