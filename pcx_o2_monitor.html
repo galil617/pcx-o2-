@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>PCX 燃調モニター</title>
+<title>PCX 燃調監視</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
 :root{
@@ -253,6 +253,10 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <canvas id="hmCv" style="height:230px"></canvas>
     <div class="legend"><span>横：開度（%）</span><span>縦：回転数</span><span><i class="blk" style="background:var(--rich);opacity:.15"></i>ほぼ制御中</span><span><i class="blk" style="background:var(--rich)"></i>ほぼ制御外</span></div>
     <p class="note num" id="hmInfo">走行データから自動で作ります。マスの数字はO2制御外だった割合（%）、空白はデータ不足（20件未満）です。開度5%未満（減速）は除外しています。</p>
+    <h3 style="font-size:15px;font-weight:400;color:var(--hot);margin:14px 0 4px">O2制御外の地図（吸気圧）</h3>
+    <canvas id="hmCv2" style="height:230px"></canvas>
+    <div class="legend"><span>横：吸気管圧力（kPa）</span><span>縦：回転数</span></div>
+    <p class="note num" id="hmInfo2">横軸を吸気管圧力にした同じ地図です。開度の地図と比べて、境目が回転数によらず縦にそろうほうが、ECUが判断に使っている値と考えられます。</p>
     <h3 style="font-size:15px;font-weight:400;color:var(--hot);margin:14px 0 4px">切り替わった瞬間</h3>
     <p class="note num" id="olSum" style="margin-top:0">まだ記録がありません。O2制御中から加速して「高負荷」に切り替わると自動で記録します。</p>
     <canvas id="olCv" style="height:170px"></canvas>
@@ -343,6 +347,12 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
 
   <details class="box">
     <summary><span style="font-family:var(--min);font-weight:400;font-size:17px;color:#ff8a1c">設定</span><span class="en">CONFIG</span></summary>
+    <h2 style="margin-top:10px">接続<span class="en">LINK</span></h2>
+    <p class="note num" id="devInfo">記憶したアダプター：なし</p>
+    <div class="row">
+      <label class="field" style="flex-direction:row;align-items:center;gap:6px;font-size:13px"><input id="iAutoCon" type="checkbox" checked style="width:auto">開いたら前回のアダプターに自動で接続する</label>
+      <button class="btn" id="bForget">記憶を消す</button>
+    </div>
     <h2 style="margin-top:10px">音声案内<span class="en">VOICE</span></h2>
     <div class="row">
       <label class="field" style="flex-direction:row;align-items:center;gap:6px;font-size:13px"><input id="iVoice" type="checkbox" checked style="width:auto">音声案内を使う</label>
@@ -430,7 +440,7 @@ h2{font-family:var(--min);font-weight:400;font-size:19px;margin:0 0 8px;color:#f
     <pre class="log" id="log"></pre>
   </details>
   <p class="note" style="text-align:center">音声：VOICEVOX:ナースロボ＿タイプＴ</p>
-  <p class="note" style="text-align:center">版：v48（2026-11-25）</p>
+  <p class="note" style="text-align:center">版：v49（2026-11-27）</p>
 </main>
 
 <script>
@@ -581,27 +591,62 @@ const REQ_OPTS = [
   () => ({filters: SERVICES.map(u => ({services:[u]})), optionalServices:SERVICES}),
   () => ({acceptAllDevices:true})
 ];
-async function connect(){
+async function findSavedDevice(){
+  if (!navigator.bluetooth || typeof navigator.bluetooth.getDevices !== 'function') return null;
+  let id = null, name = null;
+  try{ id = localStorage.getItem('pcxDevId'); name = localStorage.getItem('pcxDevName'); }catch(e){}
+  if (!id && !name) return null;
+  try{
+    const ds = await navigator.bluetooth.getDevices();
+    return ds.find(d => id && d.id === id) || ds.find(d => name && d.name === name) || null;
+  }catch(e){ log('記憶した機器の取得に失敗: ' + errStr(e)); return null; }
+}
+async function connect(auto){
   userStop = false;
   if (!navigator.bluetooth){
     status('このブラウザはBluetooth接続に対応していません。AndroidはChrome、iPhoneはBluefyで開いてください（デモは動きます）。');
     return;
   }
-  let step = 'アダプター選択';
+  // 前回つないだアダプターを覚えていれば、選択画面を出さずにつなぐ
+  const saved = await findSavedDevice();
+  if (saved){
+    status('前回のアダプター（' + (saved.name || '名前なし') + '）に自動で接続しています…');
+    log('記憶した機器に自動接続: ' + (saved.name || saved.id));
+    if (await connectWith(saved, true)) return;
+    log('自動接続できませんでした。選択画面を開きます');
+  } else if (auto){
+    if (typeof navigator.bluetooth.getDevices !== 'function') log('このブラウザは前回の機器を覚える機能に未対応');
+    return;
+  }
+  if (auto) { status('自動接続できませんでした。「ELM327に接続」を押してください。'); return; }
   try{
     status('アダプターを選んでください…');
     const opts = REQ_OPTS[reqMode % REQ_OPTS.length];
     log('選択画面の呼び出し（方式' + (reqMode % REQ_OPTS.length + 1) + '/' + REQ_OPTS.length + '）');
+    let d;
     try{
-      dev = await navigator.bluetooth.requestDevice(opts());
+      d = await navigator.bluetooth.requestDevice(opts());
     }catch(e){
       if (e && e.name === 'NotFoundError') throw e;
       reqMode++;
       throw new Error(errStr(e) + '（方式' + (reqMode % REQ_OPTS.length || REQ_OPTS.length) + 'で失敗。もう一度「接続」を押すと別の方式で試します）');
     }
+    try{ localStorage.setItem('pcxDevId', d.id || ''); localStorage.setItem('pcxDevName', d.name || ''); }catch(e){}
+    await connectWith(d, false);
+  }catch(err){
+    if (err && err.name === 'NotFoundError'){ status('接続をキャンセルしました。'); return; }
+    status('接続できませんでした（アダプター選択）：' + errStr(err));
+    log('ERR [アダプター選択] ' + errStr(err));
+  }
+}
+async function connectWith(d, quiet){
+  let step = 'Bluetooth接続';
+  try{
+    dev = d;
     log('選択: ' + (dev.name || '(名前なし)'));
+    dev.removeEventListener('gattserverdisconnected', onDisconnect);
     dev.addEventListener('gattserverdisconnected', onDisconnect);
-    step = 'Bluetooth接続'; status('接続中…');
+    status('接続中…');
     let srv;
     try{ srv = await dev.gatt.connect(); }
     catch(e){ log('接続1回目失敗: ' + errStr(e) + '　再試行します'); await new Promise(r => setTimeout(r, 800)); srv = await dev.gatt.connect(); }
@@ -619,11 +664,12 @@ async function connect(){
     await initElm();
     keepAwake();
     poll();
+    return true;
   }catch(err){
-    if (err && err.name === 'NotFoundError' && step === 'アダプター選択'){ status('接続をキャンセルしました。'); return; }
-    status('接続できませんでした（' + step + '）：' + errStr(err) + '　詳細は通信ログへ');
     log('ERR [' + step + '] ' + errStr(err));
+    if (!quiet) status('接続できませんでした（' + step + '）：' + errStr(err) + '　詳細は通信ログへ');
     stop();
+    return false;
   }
 }
 
@@ -693,7 +739,7 @@ async function initElm(){
   }
 }
 
-const SLOW = ['03','0B','03','05','03','04','03','0E','03','0F'];
+const SLOW = ['03','0B','03','05','0B','03','04','0B','03','0E','0B','03','0F','0B'];
 async function poll(){
   running = true; let n = 0; stftMiss = 0;
   const has = h => supSet.has(parseInt(h,16));
@@ -753,7 +799,7 @@ function stop(){
   if (demoTimer){ clearInterval(demoTimer); demoTimer = null; }
   if (dev && dev.gatt && dev.gatt.connected){ try{ dev.gatt.disconnect(); }catch(e){} }
   if (wakeLock){ wakeLock.release().catch(()=>{}); wakeLock = null; }
-  pending = null; mode = null; setButtons(); olDemo = []; opDemo = []; heatDemo = {}; lnDemo = []; launch = null; wasIdle = false; opening = null; curOl = null; olDirty = true; setTimeout(renderOl, 0);
+  pending = null; mode = null; setButtons(); olDemo = []; opDemo = []; heatDemo = {}; heat2Demo = {}; lnDemo = []; launch = null; wasIdle = false; opening = null; curOl = null; olDirty = true; setTimeout(renderOl, 0);
 }
 async function keepAwake(){ try{ if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){} }
 function setButtons(){
@@ -905,6 +951,10 @@ function ingest(){
   if ((S.loop === 2 || S.loop === 4) && S.tps != null && S.tps >= 5 && S.rpm != null){
     const k = hmKey(S.tps, S.rpm), hm = isDemo ? heatDemo : heat;
     const c = hm[k] || (hm[k] = [0, 0]); c[0]++; if (S.loop === 4) c[1]++;
+    if (S.map != null){
+      const k2 = hmKey2(S.map, S.rpm), hm2 = isDemo ? heat2Demo : heat2;
+      const c2 = hm2[k2] || (hm2[k2] = [0, 0]); c2[0]++; if (S.loop === 4) c2[1]++;
+    }
     if (!isDemo && ++heatTick % 50 === 0) saveHeat();
     if (heatTick % 10 === 0) olDirty = true;
   }
@@ -1108,7 +1158,14 @@ const med = arr => { if (!arr.length) return null; const a = [...arr].sort((x,y)
 const HM_T = [5,10,15,20,25,30,40,50,70,101];
 let heat = {}, heatDemo = {}, heatTick = 0;
 try{ heat = JSON.parse(localStorage.getItem('pcxHeat') || '{}') || {}; }catch(e){ heat = {}; }
-function saveHeat(){ try{ localStorage.setItem('pcxHeat', JSON.stringify(heat)); }catch(e){} }
+function saveHeat(){ try{ localStorage.setItem('pcxHeat', JSON.stringify(heat)); localStorage.setItem('pcxHeat2', JSON.stringify(heat2)); }catch(e){} }
+const HM_M = [20,30,40,50,60,70,80,90,95,105];
+let heat2 = {}, heat2Demo = {};
+try{ heat2 = JSON.parse(localStorage.getItem('pcxHeat2') || '{}') || {}; }catch(e){ heat2 = {}; }
+function hmKey2(map, rpm){
+  let c = 0; while (c < HM_M.length - 2 && map >= HM_M[c+1]) c++;
+  return c + '_' + Math.min(9, Math.floor(rpm / 1000));
+}
 function hmKey(tps, rpm){
   let c = 0; while (c < HM_T.length - 2 && tps >= HM_T[c+1]) c++;
   return c + '_' + Math.min(9, Math.floor(rpm / 1000));
@@ -1143,8 +1200,36 @@ function renderHeat(){
     : '走行データから自動で作ります。マスの数字はO2制御外だった割合（%）、空白はデータ不足（20件未満）です。開度5%未満（減速）は除外しています。';
 }
 
+function renderHeat2(){
+  const hm = mode === 'demo' ? heat2Demo : heat2;
+  const c = $('hmCv2'), dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w*dpr) || c.height !== Math.round(h*dpr)){ c.width = Math.round(w*dpr); c.height = Math.round(h*dpr); }
+  const x = c.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,w,h);
+  const cs = getComputedStyle(document.documentElement), col = v => cs.getPropertyValue(v).trim();
+  const L = 34, R = 4, T = 4, B = 18, nc = HM_M.length - 1, nr = 10;
+  const cw = (w - L - R) / nc, ch = (h - T - B) / nr;
+  x.font = '9px "DotGothic16",monospace'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  let tot = 0, totK = 0;
+  for (let ci = 0; ci < nc; ci++) for (let ri = 0; ri < nr; ri++){
+    const d = hm[ci + '_' + ri], px = L + ci*cw, py = T + (nr - 1 - ri)*ch;
+    x.strokeStyle = col('--line'); x.lineWidth = .5; x.strokeRect(px + .5, py + .5, cw - 1, ch - 1);
+    if (!d) continue;
+    tot += d[0]; totK += d[1];
+    if (d[0] < 20) continue;
+    const r = d[1] / d[0];
+    x.globalAlpha = .12 + r * .88; x.fillStyle = col('--rich'); x.fillRect(px + 1, py + 1, cw - 2, ch - 2); x.globalAlpha = 1;
+    if (cw >= 22){ x.fillStyle = r > .5 ? '#170400' : col('--ink'); x.fillText(Math.round(r*100), px + cw/2, py + ch/2 + .5); }
+  }
+  x.fillStyle = col('--sub'); x.textAlign = 'right';
+  for (const ri of [0, 5, 9]) x.fillText(ri === 0 ? '0' : ri + '千', L - 4, T + (nr - 1 - ri)*ch + ch/2);
+  x.textAlign = 'center'; x.textBaseline = 'alphabetic';
+  for (let ci = 0; ci < nc; ci++) if (ci % 2 === 0 || ci === nc - 1) x.fillText(HM_M[ci] + '', L + ci*cw, h - 4);
+  x.fillText('', w - R - 6, h - 4);
+  $('hmInfo2').textContent = tot ? (mode === 'demo' ? '（デモ・保存しません）' : '') + '集計 ' + tot + '件。横軸を吸気管圧力にした同じ地図です。開度の地図と比べて、境目が回転数によらず縦にそろうほうが、ECUが判断に使っている値と考えられます。' : '横軸を吸気管圧力にした同じ地図です。開度の地図と比べて、境目が回転数によらず縦にそろうほうが、ECUが判断に使っている値と考えられます。（この版から記録を始めます）';
+}
+
 function renderOl(){
-  renderHeat(); renderLaunch();
+  renderHeat(); renderHeat2(); renderLaunch();
   olDirty = false;
   const ev = mode === 'demo' ? olDemo : olEv, n = ev.length;
   if (!n){ $('olSum').textContent = 'まだ記録がありません。O2制御中から加速して「高負荷」に切り替わると自動で記録します。'; $('olTbl').innerHTML = ''; }
@@ -1448,7 +1533,18 @@ function saveCsv(){
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
-$('bConnect').onclick = () => { voiceInit(); connect(); };
+$('bConnect').onclick = () => { voiceInit(); connect(false); };
+$('bForget').onclick = () => {
+  try{ localStorage.removeItem('pcxDevId'); localStorage.removeItem('pcxDevName'); }catch(e){}
+  $('devInfo').textContent = '記憶したアダプター：なし（次の接続で選び直します）';
+};
+(() => { let n = null; try{ n = localStorage.getItem('pcxDevName'); }catch(e){}
+  $('devInfo').textContent = '記憶したアダプター：' + (n ? n : n === '' ? '名前なしの機器' : 'なし') +
+    (navigator.bluetooth && typeof navigator.bluetooth.getDevices === 'function' ? '' : '（このブラウザは自動接続に未対応の可能性があります）'); })();
+// 起動時の自動接続
+setTimeout(() => { try{ if ($('iAutoCon').checked && !mode) connect(true); }catch(e){} }, 600);
+try{ const v = localStorage.getItem('pcx_iAutoCon'); if (v != null) $('iAutoCon').checked = v === '1'; }catch(e){}
+$('iAutoCon').onchange = () => { try{ localStorage.setItem('pcx_iAutoCon', $('iAutoCon').checked ? '1' : '0'); }catch(e){} };
 $('bDemo').onclick = () => { voiceInit().then(() => say('connect')); startDemo(); };
 $('bVoiceTest').onclick = async () => { await voiceInit(); say('connect', true); };
 $('iVol').oninput = () => { if (vel) vel.volume = +$('iVol').value; try{ localStorage.setItem('pcx_iVol', $('iVol').value); }catch(e){} };
@@ -1509,7 +1605,7 @@ try{
 $('bOlClr').onclick = () => {
   if (!olEv.length && !opEv.length && !lnEv.length && !Object.keys(heat).length) return;
   if (!confirm('O2制御が外れた開度の記録（' + olEv.length + '回分）を消去します。元に戻せません。よろしいですか？')) return;
-  olEv = []; saveOl(); opEv = []; saveOp(); heat = {}; saveHeat(); lnEv = []; saveLn(); renderOl();
+  olEv = []; saveOl(); opEv = []; saveOp(); heat = {}; heat2 = {}; saveHeat(); lnEv = []; saveLn(); renderOl();
 };
 setTimeout(renderOl, 0);
 try{ const d = localStorage.getItem('pcxDisp'); if (d) $('sDisp').value = d; }catch(e){}
